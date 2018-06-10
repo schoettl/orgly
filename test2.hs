@@ -11,10 +11,10 @@ data Source = Source
 parseSource :: Parser Source
 parseSource = do
   manyTill anyChar
-    (endOfLine *> string "#+BEGIN_SOURCE")
+    (endOfLine *> string "#+BEGIN_SRC")
   lang <- parseSourceLanguage
   src <- T.pack <$> manyTill anyChar
-    (endOfLine *> string "#+END_SOURCE")
+    (endOfLine *> string "#+END_SRC")
   many' anyChar
   endOfInput
   return $ Source src lang
