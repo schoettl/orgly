@@ -1,0 +1,6 @@
+uaie
+uaie
+#+BEGIN_SOURCE lilypond
+foo
+bar
+#+END_SOURCE
