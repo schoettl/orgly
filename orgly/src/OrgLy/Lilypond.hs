@@ -1,5 +1,9 @@
 module OrgLy.Lilypond
-  (
+  ( insertChordSettings
+  , compileLilypondTemplate
+  , LilypondSource (..)
+  , getSectionText
+  , getPieceAttributes
   ) where
 
 import qualified Data.Text as T

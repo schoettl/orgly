@@ -1,5 +1,6 @@
 module OrgLy.OrgmodeParse
-  (
+  ( Source (..)
+  , parseSectionParagraph
   ) where
 
 import qualified Data.Text as T
@@ -28,6 +29,9 @@ main = do
   let  Right (Source src lang) = parseOnly parseSource text
   -- putStrLn $ T.unpack src
   return ()
+
+parseSectionParagraph :: Parser Source
+parseSectionParagraph = parseSource
 
 parseSource :: Parser Source
 parseSource = do
