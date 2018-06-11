@@ -2,11 +2,6 @@ module OrgLy.OrgmodeParse
   (
   ) where
 
--- required packages: blaze-markup orgmode-parse attoparsec
-
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
-
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.OrgMode.Parse

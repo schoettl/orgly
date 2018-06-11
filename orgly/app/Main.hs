@@ -1,8 +1,5 @@
 module Main where
 
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
-
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.OrgMode.Parse
