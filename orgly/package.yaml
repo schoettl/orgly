@@ -26,8 +26,8 @@ dependencies:
 - blaze-markup
 - heterocephalus
 - text
-- split
 - unordered-containers
+- docopt
 
 default-extensions:
 - OverloadedStrings
@@ -37,7 +37,7 @@ library:
   source-dirs: src
 
 executables:
-  orgly-exe:
+  orgly:
     main:                Main.hs
     source-dirs:         app
     ghc-options:

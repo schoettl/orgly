@@ -1,5 +1,8 @@
 module Main where
 
+import OrgLy.Lilypond
+import OrgLy.OrgmodeParse
+
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.OrgMode.Parse
@@ -7,13 +10,30 @@ import Data.OrgMode.Types (Document (..), Headline (title, section), Section (..
 import Data.Attoparsec.Text
 import Data.Maybe
 import qualified Data.HashMap.Lazy as M
-import Data.List as L
-import Data.List.Split
 import Text.Heterocephalus
 import Text.Blaze.Renderer.String (renderMarkup)
 import Text.Blaze.Internal (Markup)
 import Text.Blaze (ToMarkup (toMarkup))
 import qualified Text.Blaze as B
+
+import Control.Monad (when)
+import Data.Char (toUpper)
+import System.Environment (getArgs)
+import System.Console.Docopt
+
+patterns :: Docopt
+patterns = [docopt|
+orgly version 0.1.0
+
+usage:
+  orgly cat <file>
+  orgly echo [--caps] <string>
+
+options:
+  -c, --caps    Caps-lock the echoed argument
+|]
+
+getArgOrExit = getArgOrExitWith patterns
 
 newtype LilypondStringLiteral = LilypondStringLiteral Text
   deriving Show
@@ -83,6 +103,7 @@ compileLilypondTemplate attrs source transpose = [compileText|
 
 main :: IO ()
 main = do
+  args <- parseArgsOrExit patterns =<< getArgs
   text <- fmap T.pack getContents
   let Right (Document _ headlines) = parseOnly (parseDocument []) text
   -- TODO bei -l

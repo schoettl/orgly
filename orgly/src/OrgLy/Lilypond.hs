@@ -4,13 +4,9 @@ module OrgLy.Lilypond
 
 import qualified Data.Text as T
 import Data.Text (Text)
-import Data.OrgMode.Parse
 import Data.OrgMode.Types (Document (..), Headline (title, section), Section (..), Properties (..))
-import Data.Attoparsec.Text
 import Data.Maybe
 import qualified Data.HashMap.Lazy as M
-import Data.List as L
-import Data.List.Split
 import Text.Heterocephalus
 import Text.Blaze.Renderer.String (renderMarkup)
 import Text.Blaze.Internal (Markup)
@@ -83,49 +79,19 @@ compileLilypondTemplate attrs source transpose = [compileText|
 %{ endif }
 |]
 
-main :: IO ()
-main = do
-  text <- fmap T.pack getContents
-  let Right (Document _ headlines) = parseOnly (parseDocument []) text
-  -- TODO bei -l
-  --mapM_ (putStrLn  . T.unpack . title) headlines
-  let t = "Filli-Walzer" -- TODO from command line -t title
-  let headline = head $ filter ((==t) . title) headlines
-  --mapM_ (putStrLn . T.unpack . getSectionText) headlines
-  -- mapM_ (print . getPieceAttributes) $ L.take 1 headlines
+main :: Headline -> Source -> IO ()
+main headline source = do
   let pieceAttributes = getPieceAttributes headline
   -- print pieceAttributes
   let text = getSectionText headline
-  -- print $ parseOnly parseSource text
-  let  Right (Source src lang) = parseOnly parseSource text
+  let pieceAttributes = getPieceAttributes headline
+  let Source src lang = source
   -- putStrLn $ T.unpack src
   let src' = insertChordSettings src
   putStrLn $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') (Just 'a')
 
 insertChordSettings :: Text -> Text
 insertChordSettings = T.replace "\\chords {" "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords"
-
-parseSource :: Parser Source
-parseSource = do
-  manyTill anyChar
-    (endOfLine *> string "#+BEGIN_SRC")
-  lang <- parseSourceLanguage
-  src <- T.pack <$> manyTill anyChar
-    (endOfLine *> string "#+END_SRC")
-  many' anyChar
-  endOfInput
-  return $ Source src lang
-
-parseSourceLanguage :: Parser Text
-parseSourceLanguage = do
-  lang <- option "" (many1 (char ' ') *> many1 letter)
-  many' $ char ' '
-  endOfLine
-  return $ T.pack lang
-
-
-getSectionText :: Headline -> Text
-getSectionText = sectionParagraph . section
 
 getPieceAttributes :: Headline -> PieceAttributes
 getPieceAttributes headline = PieceAttributes
@@ -144,3 +110,6 @@ getPieceAttributes headline = PieceAttributes
 
 getProperty :: Text -> M.HashMap Text Text -> LilypondStringLiteral
 getProperty property = LilypondStringLiteral . fromMaybe "" . M.lookup property
+
+getSectionText :: Headline -> Text
+getSectionText = sectionParagraph . section
