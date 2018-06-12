@@ -3,7 +3,10 @@ module Main where
 import OrgLy.Lilypond
 import OrgLy.OrgmodeParse
 
+import Prelude hiding (FilePath)
+
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as L
 import qualified Data.Text.IO as TIO
 import Data.Text (Text)
 import Data.OrgMode.Parse
@@ -11,7 +14,7 @@ import Data.OrgMode.Types (Document (..), Headline (title, section), Section (..
 import Data.Maybe
 import Data.Attoparsec.Text (Parser, parseOnly, parse, maybeResult, asciiCI, endOfInput)
 import Text.Heterocephalus
-import Text.Blaze.Renderer.String (renderMarkup)
+import Text.Blaze.Renderer.Text (renderMarkup)
 import Text.Blaze.Internal (Markup)
 import Text.Blaze (ToMarkup (toMarkup))
 
@@ -20,6 +23,7 @@ import Control.Monad (when)
 import Data.Char (toUpper, toLower)
 import System.Environment (getArgs)
 import System.Console.Docopt
+import Shelly
 
 usageText :: Docopt
 usageText = [docopt|
@@ -59,7 +63,7 @@ main = do
   command <- parseCommandLine
   input <- case command of
     Command Nothing _ -> TIO.getContents
-    Command (Just f) _ -> TIO.readFile f
+    Command (Just f) _ -> shelly $ readfile f
   document <- parseOrgmode input
   let Document _ headlines = document
   case command of
@@ -79,7 +83,10 @@ parseOrgmode text = do
 
 createOutput :: OutputFormat -> Transpose -> Headline -> IO ()
 createOutput PDF t h = createPdf t h
-createOutput LilyPond (Transpose transpose) headline = do
+createOutput LilyPond t h = createLilypond t h >>= TIO.putStrLn
+
+createLilypond :: Transpose -> Headline -> IO Text
+createLilypond (Transpose transpose) headline = do
   --mapM_ (putStrLn . T.unpack . getSectionText) headlines
   -- mapM_ (print . getPieceAttributes) $ L.take 1 headlines
   let pieceAttributes = getPieceAttributes headline
@@ -89,18 +96,21 @@ createOutput LilyPond (Transpose transpose) headline = do
   let  Right (Source src lang) = parseOnly parseSectionParagraph text
   -- putStrLn $ T.unpack src
   let src' = insertChordSettings src
-  putStrLn $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
+  return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
 
 createPdf :: Transpose -> Headline -> IO ()
 createPdf transpose headline = do
-  text <- createOutput LilyPond transpose headline
-  -- use shelly to execute lilypond on the generated output
-  return ()
+  text <- createLilypond transpose headline
+  let name = T.concat [title headline, ".ly"]
+  shelly $ do
+    writefile (fromText name) text
+    setStdin text
+    run_ "lilypond" [name]
 
 parseCommandLine :: IO Command
 parseCommandLine = do
   args <- parseArgsOrExit usageText =<< getArgs
-  let maybeInputFile = getArg args (longOption "input-file")
+  let maybeInputFile = fmap (fromText . T.pack) $ getArg args (longOption "input-file")
   commandAction <- if isPresent args (longOption "list")
     then return ListTitles
     else do

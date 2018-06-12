@@ -28,6 +28,7 @@ dependencies:
 - text
 - unordered-containers
 - docopt
+- shelly
 
 default-extensions:
 - OverloadedStrings
