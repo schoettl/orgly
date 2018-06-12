@@ -50,7 +50,7 @@ data Source = Source
 compileLilypondTemplate :: PieceAttributes -> LilypondSource -> Maybe Char -> Markup
 compileLilypondTemplate attrs source transpose = [compileText|
 
-\version "2.18."
+\version "2.18.2"
 \language "deutsch"
 
 \header {
@@ -71,10 +71,9 @@ compileLilypondTemplate attrs source transpose = [compileText|
 %\set chordNameLowercaseMinor = ##t
 %\germanChords
 
-%{ case transpose }
-%{ of Just x }
-\transpose c #{x} {
-%{ endcase }
+%{ if isJust transpose }
+\transpose c #{fromJust transpose} {
+%{ endif }
 
 #{source}
 
