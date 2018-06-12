@@ -27,16 +27,20 @@ orgly version 0.1.0
 
 usage:
   orgly [-io] --list
-  orgly [-iof] --title=TITLE...
+  orgly [-iofT] --title=TITLE...
   orgly --help
 
 options:
   -l, --list
-    list all titles from orgmode input
+    List all titles from orgmode input
   -t, --title=TITLE
-    create PDF from title
+    Create PDF from title
   -f, --format=FORMAT
-    output format, one of: lilypond, pdf [default: pdf]
+    Output format, one of: lilypond, pdf [default: pdf]
+  -T, --transpose=TARGET_KEY
+    Transpose music to TARGET_KEY assuming it is originally in c major or a
+    minor respectively. TARGET_KEY must be a lower case letter and a valid
+    pitch.
   -o, --output-file=FILE
   -i, --input-file=FILE
   -h, --help
@@ -44,8 +48,9 @@ options:
 |]
 
 data Command = Command (Maybe FilePath) CommandAction deriving Show
-data CommandAction = ListTitles | CreateTitles OutputFormat [String] deriving Show
+data CommandAction = ListTitles | CreateTitles OutputFormat Transpose [String] deriving Show
 data OutputFormat = LilyPond | PDF deriving Show
+data Transpose = Transpose (Maybe Char) deriving Show
 
 getArgOrExit = getArgOrExitWith usageText
 
@@ -60,9 +65,9 @@ main = do
   case command of
     Command _ ListTitles -> do
       mapM_ (putStrLn  . T.unpack . title) headlines
-    Command _ (CreateTitles format titles) -> do
+    Command _ (CreateTitles format transpose titles) -> do
       let ts = map T.pack titles
-      mapM_ (createOutput format) $ filter (\x -> title x `elem` ts) headlines
+      mapM_ (createOutput format transpose) $ filter (\x -> title x `elem` ts) headlines
     _ -> putStrLn "command not yet implemented"
 
 parseOrgmode :: Text -> IO Document
@@ -72,9 +77,9 @@ parseOrgmode text = do
     Right doc -> return doc
     Left msg -> fail msg
 
-createOutput :: OutputFormat -> Headline -> IO ()
-createOutput PDF h = createPdf h
-createOutput LilyPond headline = do
+createOutput :: OutputFormat -> Transpose -> Headline -> IO ()
+createOutput PDF t h = createPdf t h
+createOutput LilyPond (Transpose transpose) headline = do
   --mapM_ (putStrLn . T.unpack . getSectionText) headlines
   -- mapM_ (print . getPieceAttributes) $ L.take 1 headlines
   let pieceAttributes = getPieceAttributes headline
@@ -84,11 +89,11 @@ createOutput LilyPond headline = do
   let  Right (Source src lang) = parseOnly parseSectionParagraph text
   -- putStrLn $ T.unpack src
   let src' = insertChordSettings src
-  putStrLn $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') (Just 'a')
+  putStrLn $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
 
-createPdf :: Headline -> IO ()
-createPdf headline = do
-  text <- createOutput LilyPond headline
+createPdf :: Transpose -> Headline -> IO ()
+createPdf transpose headline = do
+  text <- createOutput LilyPond transpose headline
   -- use shelly to execute lilypond on the generated output
   return ()
 
@@ -100,9 +105,10 @@ parseCommandLine = do
     then return ListTitles
     else do
       let titles = getAllArgs args (longOption "title")
+      let transpose = Transpose $ fmap head $ getArg args (longOption "transpose")
       let Just formatStr = getArg args (longOption "format")
       let Right format = parseOnly parseOutputType $ T.pack formatStr
-      return $ CreateTitles format titles
+      return $ CreateTitles format transpose titles
   return $ Command maybeInputFile commandAction
 
 parseOutputType :: Parser OutputFormat
