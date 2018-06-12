@@ -15,21 +15,6 @@ data Source = Source
   , language :: Text
   } deriving Show
 
-main :: IO ()
-main = do
-  text <- fmap T.pack getContents
-  let Right (Document _ headlines) = parseOnly (parseDocument []) text
-  -- TODO bei -l
-  --mapM_ (putStrLn  . T.unpack . title) headlines
-  let t = "Filli-Walzer" -- TODO from command line -t title
-  let headline = head $ filter ((==t) . title) headlines
-  -- mapM_ (print . getPieceAttributes) $ L.take 1 headlines
-  -- print pieceAttributes
-  -- print $ parseOnly parseSource text
-  let  Right (Source src lang) = parseOnly parseSource text
-  -- putStrLn $ T.unpack src
-  return ()
-
 parseSectionParagraph :: Parser Source
 parseSectionParagraph = parseSource
 

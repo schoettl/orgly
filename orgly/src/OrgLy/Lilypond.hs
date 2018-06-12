@@ -83,17 +83,6 @@ compileLilypondTemplate attrs source transpose = [compileText|
 %{ endif }
 |]
 
-main :: Headline -> Source -> IO ()
-main headline source = do
-  let pieceAttributes = getPieceAttributes headline
-  -- print pieceAttributes
-  let text = getSectionText headline
-  let pieceAttributes = getPieceAttributes headline
-  let Source src lang = source
-  -- putStrLn $ T.unpack src
-  let src' = insertChordSettings src
-  putStrLn $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') (Just 'a')
-
 insertChordSettings :: Text -> Text
 insertChordSettings = T.replace "\\chords {" "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords"
 
