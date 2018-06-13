@@ -11,6 +11,7 @@ module OrgLy.Lilypond
   , createPdf
   ) where
 
+import Prelude hiding (FilePath)
 import OrgLy.OrgmodeParse
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
@@ -114,9 +115,10 @@ getProperty property = LilypondStringLiteral . fromMaybe "" . M.lookup property
 getSectionText :: Headline -> Text
 getSectionText = sectionParagraph . section
 
-createOutput :: OutputFormat -> Transpose -> Headline -> IO ()
-createOutput PDF t h = createPdf t h
-createOutput LilyPond t h = createLilypond t h >>= TIO.putStrLn
+createOutput :: OutputFormat -> Transpose -> Maybe FilePath -> Headline -> IO ()
+createOutput PDF t f h = createPdf t f h
+createOutput LilyPond t Nothing h = createLilypond t h >>= TIO.putStrLn
+createOutput LilyPond t (Just f) h = createLilypond t h >>= shelly . writefile f
 
 createLilypond :: Transpose -> Headline -> IO Text
 createLilypond (Transpose transpose) headline = do
@@ -131,10 +133,11 @@ createLilypond (Transpose transpose) headline = do
   let src' = insertChordSettings src
   return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
 
-createPdf :: Transpose -> Headline -> IO ()
-createPdf transpose headline = do
+createPdf :: Transpose -> Maybe FilePath -> Headline -> IO ()
+createPdf transpose outputFile headline = do
   text <- createLilypond transpose headline
-  let name = T.concat [title headline, ".ly"]
+  let name = fromMaybe (T.concat [title headline, ".ly"])
+                       (fmap toTextIgnore outputFile)
   shelly $ do
     writefile (fromText name) text
     setStdin text

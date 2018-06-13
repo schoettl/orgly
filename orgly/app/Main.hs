@@ -45,13 +45,16 @@ options:
     minor respectively. TARGET_KEY must be a lower case letter and a valid
     pitch.
   -o, --output-file=FILE
+    Write output to this lilypond file instead of creating a file for every
+    title. This only applies when multiple titles are given.
   -i, --input-file=FILE
+    Read input file instead of stdin.
   -h, --help
     print this help message
 |]
 
 data Command = Help | Command (Maybe FilePath) CommandAction deriving Show
-data CommandAction = ListTitles | CreateTitles OutputFormat Transpose [String] deriving Show
+data CommandAction = ListTitles | CreateTitles OutputFormat Transpose (Maybe FilePath) [String] deriving Show
 
 getArgOrExit = getArgOrExitWith usageText
 
@@ -67,9 +70,9 @@ main = do
   case command of
     Command _ ListTitles -> do
       mapM_ (putStrLn  . T.unpack . title) headlines
-    Command _ (CreateTitles format transpose titles) -> do
+    Command _ (CreateTitles format transpose outputFile titles) -> do
       let ts = map T.pack titles
-      mapM_ (createOutput format transpose) $ filter (\x -> title x `elem` ts) headlines
+      mapM_ (createOutput format transpose outputFile) $ filter (\x -> title x `elem` ts) headlines
     _ -> putStrLn "command not yet implemented"
 
 parseOrgmode :: Text -> IO Document
@@ -91,9 +94,10 @@ parseCommandLine = do
         else do
           let titles = getAllArgs args (longOption "title")
           let transpose = Transpose $ fmap head $ getArg args (longOption "transpose")
+          let outputFile = fmap (fromText . T.pack) $ getArg args (longOption "output-file")
           let Just formatStr = getArg args (longOption "format")
           let Right format = parseOnly parseOutputType $ T.pack formatStr
-          return $ CreateTitles format transpose titles
+          return $ CreateTitles format transpose outputFile titles
       return $ Command maybeInputFile commandAction
 
 parseOutputType :: Parser OutputFormat
