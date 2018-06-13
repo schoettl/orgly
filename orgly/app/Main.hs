@@ -91,21 +91,25 @@ parseOrgmode text = do
 
 parseCommandLine :: IO Command
 parseCommandLine = do
-  args <- parseArgsOrExit usageText =<< getArgs
-  if isPresent args (longOption "help")
-    then return Help
-    else do
-      let maybeInputFile = fmap (fromText . T.pack) $ getArg args (longOption "input-file")
-      commandAction <- if isPresent args (longOption "list")
-        then return ListTitles
+  commandLine <- getArgs
+  let parsed = parseArgs usageText commandLine
+  case parsed of
+    Left p -> fail $ show p
+    Right args -> do
+      if isPresent args (longOption "help")
+        then return Help
         else do
-          let titles = getAllArgs args (longOption "title")
-          let transpose = Transpose $ fmap head $ getArg args (longOption "transpose")
-          let outputFile = fmap (fromText . T.pack) $ getArg args (longOption "output-file")
-          let Just formatStr = getArg args (longOption "format")
-          let Right format = parseOnly parseOutputType $ T.pack formatStr
-          return $ CreateTitles format transpose outputFile titles
-      return $ Command maybeInputFile commandAction
+          let maybeInputFile = fmap (fromText . T.pack) $ getArg args (longOption "input-file")
+          commandAction <- if isPresent args (longOption "list")
+            then return ListTitles
+            else do
+              let titles = getAllArgs args (longOption "title")
+              let transpose = Transpose $ fmap head $ getArg args (longOption "transpose")
+              let outputFile = fmap (fromText . T.pack) $ getArg args (longOption "output-file")
+              let Just formatStr = getArg args (longOption "format")
+              let Right format = parseOnly parseOutputType $ T.pack formatStr
+              return $ CreateTitles format transpose outputFile titles
+          return $ Command maybeInputFile commandAction
 
 parseOutputType :: Parser OutputFormat
 parseOutputType = (parsePDFOutputType <|> parseLilyPondOutputType) <* endOfInput
