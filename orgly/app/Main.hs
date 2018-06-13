@@ -14,7 +14,6 @@ import Data.OrgMode.Types (Document (..), Headline (title, section), Section (..
 import Data.Maybe
 import Data.Attoparsec.Text (Parser, parseOnly, parse, maybeResult, asciiCI, endOfInput)
 import Text.Heterocephalus
-import Text.Blaze.Renderer.Text (renderMarkup)
 import Text.Blaze.Internal (Markup)
 import Text.Blaze (ToMarkup (toMarkup))
 
@@ -53,8 +52,6 @@ options:
 
 data Command = Help | Command (Maybe FilePath) CommandAction deriving Show
 data CommandAction = ListTitles | CreateTitles OutputFormat Transpose [String] deriving Show
-data OutputFormat = LilyPond | PDF deriving Show
-data Transpose = Transpose (Maybe Char) deriving Show
 
 getArgOrExit = getArgOrExitWith usageText
 
@@ -81,32 +78,6 @@ parseOrgmode text = do
   case eitherResult of
     Right doc -> return doc
     Left msg -> fail msg
-
-createOutput :: OutputFormat -> Transpose -> Headline -> IO ()
-createOutput PDF t h = createPdf t h
-createOutput LilyPond t h = createLilypond t h >>= TIO.putStrLn
-
-createLilypond :: Transpose -> Headline -> IO Text
-createLilypond (Transpose transpose) headline = do
-  --mapM_ (putStrLn . T.unpack . getSectionText) headlines
-  -- mapM_ (print . getPieceAttributes) $ L.take 1 headlines
-  let pieceAttributes = getPieceAttributes headline
-  -- print pieceAttributes
-  let text = getSectionText headline
-  -- print $ parseOnly parseSource text
-  let  Right (Source src lang) = parseOnly parseSectionParagraph text
-  -- putStrLn $ T.unpack src
-  let src' = insertChordSettings src
-  return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
-
-createPdf :: Transpose -> Headline -> IO ()
-createPdf transpose headline = do
-  text <- createLilypond transpose headline
-  let name = T.concat [title headline, ".ly"]
-  shelly $ do
-    writefile (fromText name) text
-    setStdin text
-    run_ "lilypond" [name]
 
 parseCommandLine :: IO Command
 parseCommandLine = do
