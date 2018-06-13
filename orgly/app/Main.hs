@@ -72,7 +72,10 @@ main = do
       mapM_ (putStrLn  . T.unpack . title) headlines
     Command _ (CreateTitles format transpose outputFile titles) -> do
       let ts = map T.pack titles
-      mapM_ (createOutput format transpose outputFile) $ filter (\x -> title x `elem` ts) headlines
+      -- TODO catch multiple titles case and fix outputFile; later, all output
+      -- could go into one single file if -o is specified
+      let outputFile' = if length titles > 1 then Nothing else outputFile
+      mapM_ (createOutput format transpose outputFile') $ filter (\x -> title x `elem` ts) headlines
     _ -> putStrLn "command not yet implemented"
 
 parseOrgmode :: Text -> IO Document
