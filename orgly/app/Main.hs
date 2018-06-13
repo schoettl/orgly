@@ -30,7 +30,7 @@ usageText = [docopt|
 orgly version 0.1.0
 
 usage:
-  orgly [-io] --list
+  orgly --list [-io]
   orgly [-iofT] --title=TITLE...
   orgly --help
 
@@ -51,7 +51,7 @@ options:
     print this help message
 |]
 
-data Command = Command (Maybe FilePath) CommandAction deriving Show
+data Command = Help | Command (Maybe FilePath) CommandAction deriving Show
 data CommandAction = ListTitles | CreateTitles OutputFormat Transpose [String] deriving Show
 data OutputFormat = LilyPond | PDF deriving Show
 data Transpose = Transpose (Maybe Char) deriving Show
@@ -64,6 +64,7 @@ main = do
   input <- case command of
     Command Nothing _ -> TIO.getContents
     Command (Just f) _ -> shelly $ readfile f
+    Help -> exitWithUsage usageText
   document <- parseOrgmode input
   let Document _ headlines = document
   case command of
@@ -110,16 +111,19 @@ createPdf transpose headline = do
 parseCommandLine :: IO Command
 parseCommandLine = do
   args <- parseArgsOrExit usageText =<< getArgs
-  let maybeInputFile = fmap (fromText . T.pack) $ getArg args (longOption "input-file")
-  commandAction <- if isPresent args (longOption "list")
-    then return ListTitles
+  if isPresent args (longOption "help")
+    then return Help
     else do
-      let titles = getAllArgs args (longOption "title")
-      let transpose = Transpose $ fmap head $ getArg args (longOption "transpose")
-      let Just formatStr = getArg args (longOption "format")
-      let Right format = parseOnly parseOutputType $ T.pack formatStr
-      return $ CreateTitles format transpose titles
-  return $ Command maybeInputFile commandAction
+      let maybeInputFile = fmap (fromText . T.pack) $ getArg args (longOption "input-file")
+      commandAction <- if isPresent args (longOption "list")
+        then return ListTitles
+        else do
+          let titles = getAllArgs args (longOption "title")
+          let transpose = Transpose $ fmap head $ getArg args (longOption "transpose")
+          let Just formatStr = getArg args (longOption "format")
+          let Right format = parseOnly parseOutputType $ T.pack formatStr
+          return $ CreateTitles format transpose titles
+      return $ Command maybeInputFile commandAction
 
 parseOutputType :: Parser OutputFormat
 parseOutputType = (parsePDFOutputType <|> parseLilyPondOutputType) <* endOfInput
