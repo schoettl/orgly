@@ -67,9 +67,10 @@ main = do
     Help -> exitWithUsage usageText
   document <- parseOrgmode input
   let Document _ headlines = document
+  let unrolledHeadlines = unrollHeadlines headlines
   case command of
     Command _ ListTitles -> do
-      mapM_ (putStrLn  . T.unpack . title) headlines
+      mapM_ (TIO.putStrLn . title) unrolledHeadlines
     Command _ (CreateTitles format transpose outputFile titles) -> do
       let ts = map T.pack titles
       -- TODO catch multiple titles case and fix outputFile; later, all output
@@ -79,7 +80,7 @@ main = do
           putStrLn $ "warning: ignoring --output-file because of multiple --title"
           return Nothing
         else return outputFile
-      mapM_ (createOutput format transpose outputFile') $ filter (\x -> title x `elem` ts) headlines
+      mapM_ (createOutput format transpose outputFile') $ filter (\x -> title x `elem` ts) unrolledHeadlines
     _ -> putStrLn "command not yet implemented"
 
 parseOrgmode :: Text -> IO Document

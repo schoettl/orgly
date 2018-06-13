@@ -1,12 +1,13 @@
 module OrgLy.OrgmodeParse
   ( Source (..)
   , parseSectionParagraph
+  , unrollHeadlines
   ) where
 
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.OrgMode.Parse
-import Data.OrgMode.Types (Document (..), Headline (title, section), Section (..), Properties (..))
+import Data.OrgMode.Types (Document (..), Headline (title, section, subHeadlines), Section (..), Properties (..))
 import Data.Attoparsec.Text
 import Data.Maybe
 
@@ -35,3 +36,7 @@ parseSourceLanguage = do
   many' $ char ' '
   endOfLine
   return $ T.pack lang
+
+unrollHeadlines :: [Headline] -> [Headline]
+unrollHeadlines [] = []
+unrollHeadlines (h:hs) = h : unrollHeadlines (subHeadlines h) ++ unrollHeadlines hs
