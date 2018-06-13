@@ -128,10 +128,13 @@ createLilypond (Transpose transpose) headline = do
   -- print pieceAttributes
   let text = getSectionText headline
   -- print $ parseOnly parseSource text
-  let  Right (Source src lang) = parseOnly parseSectionParagraph text
-  -- putStrLn $ T.unpack src
-  let src' = insertChordSettings src
-  return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
+  case parseOnly parseSectionParagraph text of
+    Right (Source src lang) -> do
+      -- putStrLn $ T.unpack src
+      let src' = insertChordSettings src
+      return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
+    Left x -> do
+      fail $ "failed to parse '" ++ T.unpack (title headline) ++ "': " ++ x
 
 createPdf :: Transpose -> Maybe FilePath -> Headline -> IO ()
 createPdf transpose outputFile headline = do

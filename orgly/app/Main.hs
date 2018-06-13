@@ -74,7 +74,11 @@ main = do
       let ts = map T.pack titles
       -- TODO catch multiple titles case and fix outputFile; later, all output
       -- could go into one single file if -o is specified
-      let outputFile' = if length titles > 1 then Nothing else outputFile
+      outputFile' <- if length titles > 1
+        then do
+          putStrLn $ "warning: ignoring --output-file because of multiple --title"
+          return Nothing
+        else return outputFile
       mapM_ (createOutput format transpose outputFile') $ filter (\x -> title x `elem` ts) headlines
     _ -> putStrLn "command not yet implemented"
 
