@@ -129,7 +129,7 @@ createLilypond (Transpose transpose) headline = do
   let text = getSectionText headline
   -- print $ parseOnly parseSource text
   case parseOnly parseSectionParagraph text of
-    Right (Source src lang) -> do
+    Right (SectionContents _ ((Source _ src):_)) -> do
       -- putStrLn $ T.unpack src
       let src' = insertChordSettings src
       return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
@@ -145,4 +145,3 @@ createPdf transpose outputFile headline = do
     writefile (fromText name) text
     setStdin text
     run_ "lilypond" [name]
-
