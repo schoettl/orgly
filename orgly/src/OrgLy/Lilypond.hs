@@ -27,6 +27,7 @@ import Text.Blaze (ToMarkup (toMarkup))
 import qualified Text.Blaze as B
 import Shelly
 import Data.Attoparsec.Text (parseOnly)
+import System.IO (stderr)
 
 -- for simple regex string substitution
 import Text.Regex (Regex, subRegex)
@@ -171,12 +172,22 @@ createLilypond (Transpose transpose) headline = do
   let text = getSectionText headline
   -- print $ parseOnly parseSource text
   case parseOnly parseSectionParagraph text of
-    Right (SectionContents _ ((Source _ src):_)) -> do
-      -- putStrLn $ T.unpack src
-      let src' = insertChordSettings src
-      return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
+    Right (SectionContents _ contents) -> do
+      let sources = listToMaybe $ filter isLilypondSource contents
+      case sources of
+        Nothing -> do
+          TIO.hPutStrLn stderr "warning: ignoring title without lilypond source code"
+          return ""
+        Just (Source _ src) -> do
+          -- putStrLn $ T.unpack src
+          let src' = insertChordSettings src
+          return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
     Left x -> do
       fail $ "failed to parse '" ++ T.unpack (title headline) ++ "': " ++ x
+  where
+    isLilypondSource :: SectionContent -> Bool
+    isLilypondSource (Source (Just "lilypond") _) = True
+    isLilypondSource _ = False
 
 createPdf :: Transpose -> Maybe FilePath -> Headline -> IO ()
 createPdf transpose outputFile headline = do

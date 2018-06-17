@@ -5,7 +5,6 @@ module OrgLy.OrgmodeParse
   , unrollHeadlines
   ) where
 
-import Prelude hiding (takeWhile)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.OrgMode.Parse
@@ -37,7 +36,7 @@ unrollHeadlines (h:hs) = h : unrollHeadlines (subHeadlines h) ++ unrollHeadlines
 
 
 
--- | Parse the text of 'Data.OrgMode.Types.Section' sectionParagraph.
+-- | Parse the text of 'Data.OrgMode.Types.Section' 'sectionParagraph'.
 parseSectionParagraph :: Parser SectionContents
 parseSectionParagraph = parseSectionContents
 
