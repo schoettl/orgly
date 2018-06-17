@@ -15,8 +15,10 @@ import Data.Attoparsec.Text
 import Data.Maybe
 import qualified Data.HashMap.Strict as M
 import Control.Applicative ((<|>))
+import Data.Char (isSpace)
 
 data SectionContents = SectionContents O.Properties [SectionContent]
+  deriving Show
 
 data SectionContent =
     SectionText Text
@@ -28,32 +30,61 @@ data SectionContent =
   deriving Show
 
 
+-- | Unroll headlines to a flat list. 'Headline' data structures will not be changed!
+unrollHeadlines :: [Headline] -> [Headline]
+unrollHeadlines [] = []
+unrollHeadlines (h:hs) = h : unrollHeadlines (subHeadlines h) ++ unrollHeadlines hs
+
+
+
 -- | Parse the text of 'Data.OrgMode.Types.Section' sectionParagraph.
 parseSectionParagraph :: Parser SectionContents
 parseSectionParagraph = parseSectionContents
 
 parseSectionContents :: Parser SectionContents
 parseSectionContents = do
-  cs <- many' (parseSource <|> parseComment)
+  cs <- many' $
+            (parseComment <?> "comment")
+        <|> (parseSource  <?> "source code")
+        <|> (parseText    <?> "normal text")
   return $ SectionContents (O.Properties M.empty) cs
 
+parseText :: Parser SectionContent
+parseText = do
+  -- text <- T.pack <$> manyTill anyChar endOfLine
+  text <- takeTill isEndOfLine <* endOfLine
+  return $ SectionText text
+
+-- https://orgmode.org/manual/Literal-examples.html
 parseSource :: Parser SectionContent
 parseSource = do
-  manyTill anyChar
-    (endOfLine *> string "#+BEGIN_SRC")
-  lang <- parseSourceLanguage
-  src <- T.pack <$> manyTill anyChar
-    (endOfLine *> string "#+END_SRC")
-  many' anyChar
-  endOfInput
-  return $ Source (Just lang) src
+  lang <- parseBeginSrcLine
+  src <- T.pack <$> manyTill anyChar (endOfLine >> parseEndSrcLine)
+  return $ Source lang src
 
-parseSourceLanguage :: Parser Text
-parseSourceLanguage = do
-  lang <- option "" (many1 (char ' ') *> many1 letter)
-  many' $ char ' '
-  endOfLine
-  return $ T.pack lang
+parseBeginSrcLine :: Parser (Maybe Text)
+parseBeginSrcLine = do
+  skipHorizontalSpace
+  string "#+BEGIN_SRC"
+  lang <- takeWhile1 isHorizontalSpace *> takeTill isSpace
+  -- also possible with option but not really nice
+  skipToEOL -- skip optional flags
+  return $ if lang == "" then Nothing else Just lang
+
+parseEndSrcLine :: Parser ()
+parseEndSrcLine = do
+  skipHorizontalSpace
+  string "#+END_SRC"
+  skipSpaceToEOL
+
+skipHorizontalSpace :: Parser ()
+skipHorizontalSpace = skipWhile isHorizontalSpace
+
+skipToEOL :: Parser ()
+skipToEOL = skipWhile (not . isEndOfLine) >> endOfLine
+
+skipSpaceToEOL :: Parser ()
+skipSpaceToEOL = skipHorizontalSpace >> endOfLine
 
 -- https://orgmode.org/manual/Comment-lines.html
 parseComment :: Parser SectionContent
@@ -61,11 +92,11 @@ parseComment = parseLineComments <|> parseMultiLineComment
 
 parseLineComments :: Parser SectionContent
 parseLineComments = do
-  skipWhile isHorizontalSpace
+  skipHorizontalSpace
   string "# "
   -- char '#'
   -- satisfy isHorizontalSpace
-  skipWhile isHorizontalSpace
+  skipHorizontalSpace
   commentText <- takeWhile isEndOfLine
   endOfLine
   return $ Comment commentText
@@ -78,19 +109,19 @@ parseMultiLineComment = do
   return $ Comment commentText
   where
     startCommentLine = do
-      skipWhile isHorizontalSpace
+      skipHorizontalSpace
       string "#+BEGIN_COMMENT"
-      skipWhile isHorizontalSpace
+      skipHorizontalSpace
       endOfLine
     endCommentLine = do
       endOfLine
-      skipWhile isHorizontalSpace
+      skipHorizontalSpace
       string "#+END_COMMENT"
-      skipWhile isHorizontalSpace
+      skipHorizontalSpace
       endOfLine
 
-
-
-unrollHeadlines :: [Headline] -> [Headline]
-unrollHeadlines [] = []
-unrollHeadlines (h:hs) = h : unrollHeadlines (subHeadlines h) ++ unrollHeadlines hs
+parseLine :: Parser Text
+parseLine = do
+  -- text <- T.pack <$> manyTill anyChar endOfLine
+  text <- takeTill isEndOfLine <* endOfLine
+  return text

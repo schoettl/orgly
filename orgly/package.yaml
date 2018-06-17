@@ -49,8 +49,8 @@ executables:
     dependencies:
     - orgly
 
-  test:
-    main:                test.hs
+  orglytest:
+    main:                orglytest.hs
     source-dirs:         app
     ghc-options:
     - -threaded
