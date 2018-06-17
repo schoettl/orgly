@@ -47,7 +47,13 @@ parseSectionContents = do
             (parseComment <?> "comment")
         <|> (parseSource  <?> "source code")
         <|> (parseText    <?> "normal text")
-  return $ SectionContents (O.Properties M.empty) cs
+  let cs' = foldr mergeMultiLineText [] cs
+  return $ SectionContents (O.Properties M.empty) cs'
+
+mergeMultiLineText :: SectionContent -> [SectionContent] -> [SectionContent]
+mergeMultiLineText c [] = [c]
+mergeMultiLineText (SectionText t) (SectionText t' : xs) = (SectionText $ T.concat [t, "\n", t']) : xs
+mergeMultiLineText c xs = c : xs
 
 parseText :: Parser SectionContent
 parseText = do
@@ -96,8 +102,8 @@ parseLineComments = do
   string "# "
   -- char '#'
   -- satisfy isHorizontalSpace
-  skipHorizontalSpace
-  commentText <- takeWhile isEndOfLine
+  -- skipHorizontalSpace
+  commentText <- takeTill isEndOfLine
   endOfLine
   return $ Comment commentText
 
