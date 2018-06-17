@@ -28,6 +28,10 @@ import qualified Text.Blaze as B
 import Shelly
 import Data.Attoparsec.Text (parseOnly)
 
+-- for simple regex string substitution
+import Text.Regex (Regex, subRegex)
+import Text.Regex.Quote
+
 newtype LilypondStringLiteral = LilypondStringLiteral Text
   deriving Show
 
@@ -91,8 +95,46 @@ compileLilypondTemplate attrs source transpose = [compileText|
 %{ endif }
 |]
 
+compileLilypondBookTemplate :: [(PieceAttributes, LilypondSource)] -> Maybe Char -> Markup
+compileLilypondBookTemplate pieces transpose = [compileText|
+
+\version "2.18.2"
+\language "deutsch"
+
+\header {
+  tagline = ##f
+}
+
+\book {
+
+  %{ forall (attrs, src) <- pieces }
+  \score {
+    \header {
+      piece = #{ paTitle attrs }
+    }
+
+    %{ if isJust transpose }
+    \transpose c #{fromJust transpose} {
+    %{ endif }
+
+    #{src}
+
+    %{ if isJust transpose }
+    }
+    %{ endif }
+
+  }
+  %{ endforall }
+
+}
+|]
+
 insertChordSettings :: Text -> Text
-insertChordSettings = T.replace "\\chords {" "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords"
+-- insertChordSettings = T.replace "\\chords {" "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords"
+insertChordSettings input = T.pack $ subRegex
+                              [r|\\chords[[:space:]]*\{|]
+                              (T.unpack input)
+                              "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords"
 
 getPieceAttributes :: Headline -> PieceAttributes
 getPieceAttributes headline = PieceAttributes

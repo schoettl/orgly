@@ -30,7 +30,7 @@ orgly version 0.1.0
 
 usage:
   orgly --list [-io]
-  orgly [-iofT] --title=TITLE...
+  orgly [-iofbT] --title=TITLE...
   orgly --help
 
 options:
@@ -47,6 +47,8 @@ options:
   -o, --output-file=FILE
     Write output to this lilypond file instead of creating a file for every
     title. This only applies when multiple titles are given.
+  -b, --book
+    Create one document for all selected titles. This can save a lot of paper.
   -i, --input-file=FILE
     Read input file instead of stdin.
   -h, --help
@@ -54,7 +56,7 @@ options:
 |]
 
 data Command = Help | Command (Maybe FilePath) CommandAction deriving Show
-data CommandAction = ListTitles | CreateTitles OutputFormat Transpose (Maybe FilePath) [String] deriving Show
+data CommandAction = ListTitles | CreateTitles OutputFormat Bool Transpose (Maybe FilePath) [String] deriving Show
 
 getArgOrExit = getArgOrExitWith usageText
 
@@ -71,11 +73,11 @@ main = do
   case command of
     Command _ ListTitles -> do
       mapM_ (TIO.putStrLn . title) unrolledHeadlines
-    Command _ (CreateTitles format transpose outputFile titles) -> do
+    Command _ (CreateTitles format book transpose outputFile titles) -> do
       let ts = map T.pack titles
       -- TODO catch multiple titles case and fix outputFile; later, all output
       -- could go into one single file if -o is specified
-      outputFile' <- if length titles > 1
+      outputFile' <- if length titles > 1 && isJust outputFile
         then do
           putStrLn $ "warning: ignoring --output-file because of multiple --title"
           return Nothing
@@ -107,9 +109,10 @@ parseCommandLine = do
               let titles = getAllArgs args (longOption "title")
               let transpose = Transpose $ fmap head $ getArg args (longOption "transpose")
               let outputFile = fmap (fromText . T.pack) $ getArg args (longOption "output-file")
+              let book = isPresent args (longOption "book")
               let Just formatStr = getArg args (longOption "format")
               let Right format = parseOnly parseOutputType $ T.pack formatStr
-              return $ CreateTitles format transpose outputFile titles
+              return $ CreateTitles format book transpose outputFile titles
           return $ Command maybeInputFile commandAction
 
 parseOutputType :: Parser OutputFormat

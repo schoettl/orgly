@@ -29,6 +29,8 @@ dependencies:
 - unordered-containers
 - docopt
 - shelly
+- regex-compat
+- lens-regex
 
 default-extensions:
 - OverloadedStrings
