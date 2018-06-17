@@ -74,8 +74,7 @@ main = do
     Command _ ListTitles -> do
       mapM_ (TIO.putStrLn . title) unrolledHeadlines
     Command _ (CreateTitles format book transpose outputFile titles) -> do
-      -- TODO catch multiple titles case and fix outputFile; later, all output
-      -- could go into one single file if -o is specified
+      let selectedTitles = filter (\x -> title x `elem` titles) unrolledHeadlines
       if book
         then do
           outputFile' <- if isNothing outputFile && format == PDF
@@ -83,14 +82,14 @@ main = do
               putStrLnStderr "error: --book and --formt=pdf requires --output-file"
               exitFailure
             else return outputFile
-          createBookOutput format transpose outputFile' unrolledHeadlines
+          createBookOutput format transpose outputFile' selectedTitles
         else do
           outputFile' <- if length titles > 1 && isJust outputFile
             then do
               putStrLnStderr "warning: ignoring --output-file because of multiple --title"
               return Nothing
             else return outputFile
-          mapM_ (createOutput format transpose outputFile') $ filter (\x -> title x `elem` titles) unrolledHeadlines
+          mapM_ (createOutput format transpose outputFile') selectedTitles
 
 parseOrgmode :: Text -> IO Document
 parseOrgmode text = do

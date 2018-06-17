@@ -172,25 +172,10 @@ createBookOutput _ _ _ _ = fail "programming error - errornous call to createBoo
 
 createLilypond :: Transpose -> Headline -> IO Text
 createLilypond (Transpose transpose) headline = do
-  --mapM_ (putStrLn . T.unpack . getSectionText) headlines
-  -- mapM_ (print . getPieceAttributes) $ L.take 1 headlines
   let pieceAttributes = getPieceAttributes headline
-  -- print pieceAttributes
   let text = getSectionText headline
-  -- print $ parseOnly parseSource text
-  case parseOnly parseSectionParagraph text of
-    Right (SectionContents _ contents) -> do
-      let sources = listToMaybe $ filter isLilypondSource contents
-      case sources of
-        Nothing -> do
-          putStrLnStderr "warning: ignoring title without lilypond source code"
-          return ""
-        Just (Source _ src) -> do
-          -- putStrLn $ T.unpack src
-          let src' = insertChordSettings src
-          return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
-    Left x -> do
-      fail $ "failed to parse '" ++ T.unpack (title headline) ++ "': " ++ x
+  source <- insertChordSettings <$> extractLilypondSource headline
+  returnRenderedMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource source) transpose
 
 isLilypondSource :: SectionContent -> Bool
 isLilypondSource (Source (Just "lilypond") _) = True
@@ -198,22 +183,23 @@ isLilypondSource _ = False
 
 createBookLilypond :: Transpose -> [Headline] -> IO Text
 createBookLilypond (Transpose transpose) headlines = do
-  return ""
-  -- let pieceAttributes = getPieceAttributes headline
-  -- let text = getSectionText headline
-  -- case parseOnly parseSectionParagraph text of
-  --   Right (SectionContents _ contents) -> do
-  --     let sources = listToMaybe $ filter isLilypondSource contents
-  --     case sources of
-  --       Nothing -> do
-  --         putStrLnStderr "warning: ignoring title without lilypond source code"
-  --         return ""
-  --       Just (Source _ src) -> do
-  --         -- putStrLn $ T.unpack src
-  --         let src' = insertChordSettings src
-  --         return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
-  --   Left x -> do
-  --     fail $ "failed to parse '" ++ T.unpack (title headline) ++ "': " ++ x
+  sources <- mapM extractLilypondSource headlines
+  let pieces = zip (map getPieceAttributes headlines) (map (LilypondSource . insertChordSettings) sources)
+  returnRenderedMarkup $ compileLilypondBookTemplate pieces transpose
+
+extractLilypondSource :: Headline -> IO Text
+extractLilypondSource headline = do
+  let text = getSectionText headline
+  case parseOnly parseSectionParagraph text of
+    Right (SectionContents _ contents) -> do
+      let source = listToMaybe $ filter isLilypondSource contents
+      case source of
+        Nothing -> do
+          putStrLnStderr "warning: ignoring title without lilypond source code"
+          return ""
+        Just (Source _ src) -> return src
+    Left x -> do
+      fail $ "failed to parse '" ++ T.unpack (title headline) ++ "': " ++ x
 
 createPdf :: FilePath -> Text -> IO ()
 createPdf outputFile lilypond = do
@@ -223,3 +209,5 @@ createPdf outputFile lilypond = do
 
 putStrLnStderr :: Text -> IO ()
 putStrLnStderr = TIO.hPutStrLn stderr
+
+returnRenderedMarkup = return . L.toStrict . renderMarkup
