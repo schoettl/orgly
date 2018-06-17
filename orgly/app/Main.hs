@@ -17,6 +17,8 @@ import Text.Heterocephalus
 import Text.Blaze.Internal (Markup)
 import Text.Blaze (ToMarkup (toMarkup))
 
+import System.IO (stderr)
+import System.Exit (exitFailure)
 import Control.Applicative ((<|>))
 import Control.Monad (when)
 import Data.Char (toUpper, toLower)
@@ -26,8 +28,6 @@ import Shelly
 
 usageText :: Docopt
 usageText = [docopt|
-orgly version 0.1.0
-
 usage:
   orgly --list [-io]
   orgly [-iofbT] --title=TITLE...
@@ -56,7 +56,7 @@ options:
 |]
 
 data Command = Help | Command (Maybe FilePath) CommandAction deriving Show
-data CommandAction = ListTitles | CreateTitles OutputFormat Bool Transpose (Maybe FilePath) [String] deriving Show
+data CommandAction = ListTitles | CreateTitles OutputFormat Bool Transpose (Maybe FilePath) [Text] deriving Show
 
 getArgOrExit = getArgOrExitWith usageText
 
@@ -74,16 +74,23 @@ main = do
     Command _ ListTitles -> do
       mapM_ (TIO.putStrLn . title) unrolledHeadlines
     Command _ (CreateTitles format book transpose outputFile titles) -> do
-      let ts = map T.pack titles
       -- TODO catch multiple titles case and fix outputFile; later, all output
       -- could go into one single file if -o is specified
-      outputFile' <- if length titles > 1 && isJust outputFile
+      if book
         then do
-          putStrLn $ "warning: ignoring --output-file because of multiple --title"
-          return Nothing
-        else return outputFile
-      mapM_ (createOutput format transpose outputFile') $ filter (\x -> title x `elem` ts) unrolledHeadlines
-    _ -> putStrLn "command not yet implemented"
+          outputFile' <- if isNothing outputFile && format == PDF
+            then do
+              putStrLnStderr "error: --book and --formt=pdf requires --output-file"
+              exitFailure
+            else return outputFile
+          createBookOutput format transpose outputFile' unrolledHeadlines
+        else do
+          outputFile' <- if length titles > 1 && isJust outputFile
+            then do
+              putStrLnStderr "warning: ignoring --output-file because of multiple --title"
+              return Nothing
+            else return outputFile
+          mapM_ (createOutput format transpose outputFile') $ filter (\x -> title x `elem` titles) unrolledHeadlines
 
 parseOrgmode :: Text -> IO Document
 parseOrgmode text = do
@@ -97,7 +104,7 @@ parseCommandLine = do
   commandLine <- getArgs
   let parsed = parseArgs usageText commandLine
   case parsed of
-    Left p -> fail $ show p
+    Left p -> exitWithUsageMessage usageText (show p)
     Right args -> do
       if isPresent args (longOption "help")
         then return Help
@@ -106,7 +113,7 @@ parseCommandLine = do
           commandAction <- if isPresent args (longOption "list")
             then return ListTitles
             else do
-              let titles = getAllArgs args (longOption "title")
+              let titles = map T.pack $ getAllArgs args (longOption "title")
               let transpose = Transpose $ fmap head $ getArg args (longOption "transpose")
               let outputFile = fmap (fromText . T.pack) $ getArg args (longOption "output-file")
               let book = isPresent args (longOption "book")
@@ -125,3 +132,6 @@ parseLilyPondOutputType :: Parser OutputFormat
 parseLilyPondOutputType = do
   asciiCI "lilypond" <|> asciiCI "ly"
   return LilyPond
+
+putStrLnStderr :: Text -> IO ()
+putStrLnStderr = TIO.hPutStrLn stderr

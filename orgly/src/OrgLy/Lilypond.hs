@@ -1,14 +1,12 @@
 module OrgLy.Lilypond
   ( insertChordSettings
-  , compileLilypondTemplate
   , LilypondSource (..)
   , OutputFormat (..)
   , Transpose (..)
   , getSectionText
   , getPieceAttributes
   , createOutput
-  , createLilypond
-  , createPdf
+  , createBookOutput
   ) where
 
 import Prelude hiding (FilePath)
@@ -46,7 +44,7 @@ instance ToMarkup LilypondStringLiteral where
 instance ToMarkup LilypondSource where
   toMarkup (LilypondSource s) = B.preEscapedText s
 
-data OutputFormat = LilyPond | PDF deriving Show
+data OutputFormat = LilyPond | PDF deriving (Show, Eq)
 data Transpose = Transpose (Maybe Char) deriving Show
 
 data PieceAttributes = PieceAttributes
@@ -159,9 +157,18 @@ getSectionText :: Headline -> Text
 getSectionText = sectionParagraph . section
 
 createOutput :: OutputFormat -> Transpose -> Maybe FilePath -> Headline -> IO ()
-createOutput PDF t f h = createPdf t f h
+createOutput PDF t f h = createLilypond t h >>= createPdf (getFilename f h)
 createOutput LilyPond t Nothing h = createLilypond t h >>= TIO.putStrLn
 createOutput LilyPond t (Just f) h = createLilypond t h >>= shelly . writefile f
+
+getFilename :: Maybe FilePath -> Headline -> FilePath
+getFilename f h = fromMaybe (fromText $ T.concat [title h, ".ly"]) f
+
+createBookOutput :: OutputFormat -> Transpose -> Maybe FilePath -> [Headline] -> IO ()
+createBookOutput PDF t (Just f) hs = createBookLilypond t hs >>= createPdf f
+createBookOutput LilyPond t Nothing hs = createBookLilypond t hs >>= TIO.putStrLn
+createBookOutput LilyPond t (Just f) hs = createBookLilypond t hs >>= shelly . writefile f
+createBookOutput _ _ _ _ = fail "programming error - errornous call to createBookOutput"
 
 createLilypond :: Transpose -> Headline -> IO Text
 createLilypond (Transpose transpose) headline = do
@@ -176,7 +183,7 @@ createLilypond (Transpose transpose) headline = do
       let sources = listToMaybe $ filter isLilypondSource contents
       case sources of
         Nothing -> do
-          TIO.hPutStrLn stderr "warning: ignoring title without lilypond source code"
+          putStrLnStderr "warning: ignoring title without lilypond source code"
           return ""
         Just (Source _ src) -> do
           -- putStrLn $ T.unpack src
@@ -184,17 +191,35 @@ createLilypond (Transpose transpose) headline = do
           return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
     Left x -> do
       fail $ "failed to parse '" ++ T.unpack (title headline) ++ "': " ++ x
-  where
-    isLilypondSource :: SectionContent -> Bool
-    isLilypondSource (Source (Just "lilypond") _) = True
-    isLilypondSource _ = False
 
-createPdf :: Transpose -> Maybe FilePath -> Headline -> IO ()
-createPdf transpose outputFile headline = do
-  text <- createLilypond transpose headline
-  let name = fromMaybe (T.concat [title headline, ".ly"])
-                       (fmap toTextIgnore outputFile)
+isLilypondSource :: SectionContent -> Bool
+isLilypondSource (Source (Just "lilypond") _) = True
+isLilypondSource _ = False
+
+createBookLilypond :: Transpose -> [Headline] -> IO Text
+createBookLilypond (Transpose transpose) headlines = do
+  return ""
+  -- let pieceAttributes = getPieceAttributes headline
+  -- let text = getSectionText headline
+  -- case parseOnly parseSectionParagraph text of
+  --   Right (SectionContents _ contents) -> do
+  --     let sources = listToMaybe $ filter isLilypondSource contents
+  --     case sources of
+  --       Nothing -> do
+  --         putStrLnStderr "warning: ignoring title without lilypond source code"
+  --         return ""
+  --       Just (Source _ src) -> do
+  --         -- putStrLn $ T.unpack src
+  --         let src' = insertChordSettings src
+  --         return $ L.toStrict $ renderMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource src') transpose
+  --   Left x -> do
+  --     fail $ "failed to parse '" ++ T.unpack (title headline) ++ "': " ++ x
+
+createPdf :: FilePath -> Text -> IO ()
+createPdf outputFile lilypond = do
   shelly $ do
-    writefile (fromText name) text
-    setStdin text
-    run_ "lilypond" [name]
+    writefile outputFile lilypond
+    run_ "lilypond" [toTextIgnore outputFile]
+
+putStrLnStderr :: Text -> IO ()
+putStrLnStderr = TIO.hPutStrLn stderr
