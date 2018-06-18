@@ -10,8 +10,8 @@ import qualified Data.Text.Lazy as L
 import qualified Data.Text.IO as TIO
 import Data.Text (Text)
 import Data.OrgMode.Parse
-import Data.OrgMode.Types (Document (..), Headline (title, section), Section (..), Properties (..))
-import Data.Maybe
+import Data.OrgMode.Types (Document (..), Headline (title, section, subHeadlines), Section (..), Properties (..))
+import Data.Maybe (isNothing, isJust, listToMaybe)
 import Data.Attoparsec.Text (Parser, parseOnly, parse, maybeResult, asciiCI, endOfInput)
 import Text.Heterocephalus
 import Text.Blaze.Internal (Markup)
@@ -29,8 +29,8 @@ import Shelly
 usageText :: Docopt
 usageText = [docopt|
 usage:
-  orgly --list [-io]
-  orgly [-iofbT] --title=TITLE...
+  orgly --list [-ios]
+  orgly [-iofbsT] --title=TITLE...
   orgly --help
 
 options:
@@ -51,11 +51,13 @@ options:
     Create one document for all selected titles. This can save a lot of paper.
   -i, --input-file=FILE
     Read input file instead of stdin.
+  -s, --sublist=TITLE
+    Only read the sublist with this title from the orgmode input.
   -h, --help
     print this help message
 |]
 
-data Command = Help | Command (Maybe FilePath) CommandAction deriving Show
+data Command = Help | Command (Maybe Text) (Maybe FilePath) CommandAction deriving Show
 data CommandAction =
     ListTitles
   | CreateTitles OutputFormat Transpose (Maybe FilePath) [Text]
@@ -68,19 +70,21 @@ main :: IO ()
 main = do
   command <- parseCommandLine
   input <- case command of
-    Command Nothing _ -> TIO.getContents
-    Command (Just f) _ -> shelly $ readfile f
+    Command _ Nothing _ -> TIO.getContents
+    Command _ (Just f) _ -> shelly $ readfile f
     Help -> exitWithUsage usageText
+  let Command sublistTitle _ _ = command
   document <- parseOrgmode input
   let Document _ headlines = document
-  let unrolledHeadlines = unrollHeadlines headlines
+  let sublist = maybe headlines (extractSublist headlines) $ sublistTitle
+  let unrolledHeadlines = unrollHeadlines sublist
   case command of
-    Command _ ListTitles -> do
+    Command _ _ ListTitles -> do
       mapM_ (TIO.putStrLn . title) unrolledHeadlines
-    Command _ (CreateTitles format transpose outputFile titles) -> do
+    Command _ _ (CreateTitles format transpose outputFile titles) -> do
       let selectedTitles = filter (\x -> title x `elem` titles) unrolledHeadlines
       mapM_ (createOutput format transpose outputFile) selectedTitles
-    Command _ (CreateTitlesBook format transpose outputFile titles) -> do
+    Command _ _ (CreateTitlesBook format transpose outputFile titles) -> do
       let selectedTitles = filter (\x -> title x `elem` titles) unrolledHeadlines
       createBookOutput format transpose outputFile selectedTitles
 
@@ -102,6 +106,7 @@ parseCommandLine = do
         then return Help
         else do
           let maybeInputFile = fmap (fromText . T.pack) $ getArg args (longOption "input-file")
+              sublistTitle = T.pack <$> getArg args (longOption "sublist")
           commandAction <- if isPresent args (longOption "list")
             then return ListTitles
             else do
@@ -128,7 +133,7 @@ parseCommandLine = do
                     else do
                       return $ CreateTitles format transpose outputFile titles
 
-          return $ Command maybeInputFile commandAction
+          return $ Command sublistTitle maybeInputFile commandAction
 
 parseOutputType :: Parser OutputFormat
 parseOutputType = (parsePDFOutputType <|> parseLilyPondOutputType) <* endOfInput
@@ -143,3 +148,10 @@ parseLilyPondOutputType = do
 
 putStrLnStderr :: Text -> IO ()
 putStrLnStderr = TIO.hPutStrLn stderr
+
+extractSublist :: [Headline] -> Text -> [Headline]
+extractSublist hs t =
+  let h = listToMaybe $ filter (\x -> title x == t) hs
+   in case h of
+     Nothing -> extractSublist (concatMap subHeadlines hs) t
+     Just x -> subHeadlines x
