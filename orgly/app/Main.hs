@@ -56,7 +56,11 @@ options:
 |]
 
 data Command = Help | Command (Maybe FilePath) CommandAction deriving Show
-data CommandAction = ListTitles | CreateTitles OutputFormat Bool Transpose (Maybe FilePath) [Text] deriving Show
+data CommandAction =
+    ListTitles
+  | CreateTitles OutputFormat Transpose (Maybe FilePath) [Text]
+  | CreateTitlesBook OutputFormat Transpose (Maybe FilePath) [Text]
+  deriving Show
 
 getArgOrExit = getArgOrExitWith usageText
 
@@ -73,23 +77,12 @@ main = do
   case command of
     Command _ ListTitles -> do
       mapM_ (TIO.putStrLn . title) unrolledHeadlines
-    Command _ (CreateTitles format book transpose outputFile titles) -> do
+    Command _ (CreateTitles format transpose outputFile titles) -> do
       let selectedTitles = filter (\x -> title x `elem` titles) unrolledHeadlines
-      if book
-        then do
-          outputFile' <- if isNothing outputFile && format == PDF
-            then do
-              putStrLnStderr "error: --book and --formt=pdf requires --output-file"
-              exitFailure
-            else return outputFile
-          createBookOutput format transpose outputFile' selectedTitles
-        else do
-          outputFile' <- if length titles > 1 && isJust outputFile
-            then do
-              putStrLnStderr "warning: ignoring --output-file because of multiple --title"
-              return Nothing
-            else return outputFile
-          mapM_ (createOutput format transpose outputFile') selectedTitles
+      mapM_ (createOutput format transpose outputFile) selectedTitles
+    Command _ (CreateTitlesBook format transpose outputFile titles) -> do
+      let selectedTitles = filter (\x -> title x `elem` titles) unrolledHeadlines
+      createBookOutput format transpose outputFile selectedTitles
 
 parseOrgmode :: Text -> IO Document
 parseOrgmode text = do
@@ -118,7 +111,23 @@ parseCommandLine = do
               let book = isPresent args (longOption "book")
               let Just formatStr = getArg args (longOption "format")
               let Right format = parseOnly parseOutputType $ T.pack formatStr
-              return $ CreateTitles format book transpose outputFile titles
+
+              if book
+                then do
+                  if isNothing outputFile && format == PDF
+                    then do
+                      putStrLnStderr "error: --book and --formt=pdf requires --output-file"
+                      exitFailure
+                    else return $ CreateTitlesBook format transpose outputFile titles
+
+                else do
+                  if length titles > 1 && isJust outputFile
+                    then do
+                      putStrLnStderr "warning: ignoring --output-file because of multiple --title"
+                      return $ CreateTitles format transpose Nothing titles
+                    else do
+                      return $ CreateTitles format transpose outputFile titles
+
           return $ Command maybeInputFile commandAction
 
 parseOutputType :: Parser OutputFormat

@@ -1,10 +1,7 @@
 module OrgLy.Lilypond
   ( insertChordSettings
-  , LilypondSource (..)
   , OutputFormat (..)
   , Transpose (..)
-  , getSectionText
-  , getPieceAttributes
   , createOutput
   , createBookOutput
   ) where
@@ -129,11 +126,11 @@ compileLilypondBookTemplate pieces transpose = [compileText|
 |]
 
 insertChordSettings :: Text -> Text
--- insertChordSettings = T.replace "\\chords {" "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords"
+-- insertChordSettings = T.replace "\\chords {" "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords\n"
 insertChordSettings input = T.pack $ subRegex
                               [r|\\chords[[:space:]]*\{|]
                               (T.unpack input)
-                              "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords"
+                              "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords\n"
 
 getPieceAttributes :: Headline -> PieceAttributes
 getPieceAttributes headline = PieceAttributes
@@ -168,13 +165,13 @@ createBookOutput :: OutputFormat -> Transpose -> Maybe FilePath -> [Headline] ->
 createBookOutput PDF t (Just f) hs = createBookLilypond t hs >>= createPdf f
 createBookOutput LilyPond t Nothing hs = createBookLilypond t hs >>= TIO.putStrLn
 createBookOutput LilyPond t (Just f) hs = createBookLilypond t hs >>= shelly . writefile f
-createBookOutput _ _ _ _ = fail "programming error - errornous call to createBookOutput"
+createBookOutput _ _ _ _ = fail "you found a bug - errornous call to createBookOutput"
 
 createLilypond :: Transpose -> Headline -> IO Text
 createLilypond (Transpose transpose) headline = do
   let pieceAttributes = getPieceAttributes headline
   let text = getSectionText headline
-  source <- insertChordSettings <$> extractLilypondSource headline
+  source <- insertChordSettings <$> fromMaybe "" <$> extractLilypondSource headline
   returnRenderedMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource source) transpose
 
 isLilypondSource :: SectionContent -> Bool
@@ -183,11 +180,11 @@ isLilypondSource _ = False
 
 createBookLilypond :: Transpose -> [Headline] -> IO Text
 createBookLilypond (Transpose transpose) headlines = do
-  sources <- mapM extractLilypondSource headlines
+  sources <- mapM (fmap (fromMaybe "") . extractLilypondSource) headlines
   let pieces = zip (map getPieceAttributes headlines) (map (LilypondSource . insertChordSettings) sources)
   returnRenderedMarkup $ compileLilypondBookTemplate pieces transpose
 
-extractLilypondSource :: Headline -> IO Text
+extractLilypondSource :: Headline -> IO (Maybe Text)
 extractLilypondSource headline = do
   let text = getSectionText headline
   case parseOnly parseSectionParagraph text of
@@ -196,8 +193,8 @@ extractLilypondSource headline = do
       case source of
         Nothing -> do
           putStrLnStderr "warning: ignoring title without lilypond source code"
-          return ""
-        Just (Source _ src) -> return src
+          return Nothing
+        Just (Source _ src) -> return $ Just src
     Left x -> do
       fail $ "failed to parse '" ++ T.unpack (title headline) ++ "': " ++ x
 
