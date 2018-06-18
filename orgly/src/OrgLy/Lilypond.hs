@@ -172,6 +172,7 @@ createLilypond (Transpose transpose) headline = do
   let pieceAttributes = getPieceAttributes headline
   let text = getSectionText headline
   source <- insertChordSettings <$> fromMaybe "" <$> extractLilypondSource headline
+  -- TODO parse source to get key for transpose
   returnRenderedMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource source) transpose
 
 isLilypondSource :: SectionContent -> Bool
@@ -181,6 +182,7 @@ isLilypondSource _ = False
 createBookLilypond :: Transpose -> [Headline] -> IO Text
 createBookLilypond (Transpose transpose) headlines = do
   sources <- mapM (fmap (fromMaybe "") . extractLilypondSource) headlines
+  -- TODO parse sources to get key for transpose
   let pieces = zip (map getPieceAttributes headlines) (map (LilypondSource . insertChordSettings) sources)
   returnRenderedMarkup $ compileLilypondBookTemplate pieces transpose
 

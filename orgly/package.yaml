@@ -30,6 +30,7 @@ dependencies:
 - shelly
 - regex-compat
 - lens-regex
+- lilypond
 
 default-extensions:
 - OverloadedStrings

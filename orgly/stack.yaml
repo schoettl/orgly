@@ -42,6 +42,10 @@ packages:
 extra-deps:
   - orgmode-parse-0.2.1
   - thyme-0.3.5.5
+  - lilypond-1.9.0
+  - music-dynamics-literal-1.9.0
+  - music-pitch-literal-1.9.0
+  - prettify-1.0
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
