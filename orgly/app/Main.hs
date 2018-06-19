@@ -29,7 +29,7 @@ import Shelly
 usageText :: Docopt
 usageText = [docopt|
 usage:
-  orgly --list [-ios]
+  orgly [-ios] --list
   orgly [-iofbsT] --title=TITLE...
   orgly --help
 

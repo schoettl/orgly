@@ -8,8 +8,10 @@ module OrgLy.Lilypond
 
 import Prelude hiding (FilePath)
 import OrgLy.OrgmodeParse
+import OrgLy.LilypondParse (parseLilypondSource)
+import qualified Data.Music.Lilypond as L
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as L
+import qualified Data.Text.Lazy
 import Data.Text (Text)
 import qualified Data.Text.IO as TIO
 import Data.OrgMode.Types (Document (..), Headline (title, section), Section (..), Properties (..))
@@ -173,7 +175,14 @@ createLilypond (Transpose transpose) headline = do
   let text = getSectionText headline
   source <- insertChordSettings <$> fromMaybe "" <$> extractLilypondSource headline
   -- TODO parse source to get key for transpose
+  let (Right music) = parseOnly parseLilypondSource source
+  let (L.Key (L.Pitch (pitchName, 0, 0)) _) = head $ filter isKey music
+  -- TODO pass Nothing for transpose if (show pitchName) == transpose
   returnRenderedMarkup $ compileLilypondTemplate pieceAttributes (LilypondSource source) transpose
+
+isKey :: L.Music -> Bool
+isKey (L.Key _ _) = True
+isKey _ = False
 
 isLilypondSource :: SectionContent -> Bool
 isLilypondSource (Source (Just "lilypond") _) = True
@@ -209,4 +218,4 @@ createPdf outputFile lilypond = do
 putStrLnStderr :: Text -> IO ()
 putStrLnStderr = TIO.hPutStrLn stderr
 
-returnRenderedMarkup = return . L.toStrict . renderMarkup
+returnRenderedMarkup = return . Data.Text.Lazy.toStrict . renderMarkup
