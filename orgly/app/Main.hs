@@ -16,6 +16,7 @@ import Data.Attoparsec.Text (Parser, parseOnly, parse, maybeResult, asciiCI, end
 import Text.Heterocephalus
 import Text.Blaze.Internal (Markup)
 import Text.Blaze (ToMarkup (toMarkup))
+import Data.List ((\\))
 
 import System.IO (stderr)
 import System.Exit (exitFailure)
@@ -82,11 +83,27 @@ main = do
     Command _ _ ListTitles -> do
       mapM_ (TIO.putStrLn . title) unrolledHeadlines
     Command _ _ (CreateTitles format transpose outputFile titles) -> do
-      let selectedTitles = filter (\x -> title x `elem` titles) unrolledHeadlines
-      mapM_ (createOutput format transpose outputFile) selectedTitles
+      executeIfTitlesFound titles unrolledHeadlines
+        (mapM_ (createOutput format transpose outputFile))
     Command _ _ (CreateTitlesBook format transpose outputFile titles) -> do
-      let selectedTitles = filter (\x -> title x `elem` titles) unrolledHeadlines
-      createBookOutput format transpose outputFile selectedTitles
+      executeIfTitlesFound titles unrolledHeadlines
+        (createBookOutput format transpose outputFile)
+
+executeIfTitlesFound :: [Text] -> [Headline] -> ([Headline] -> IO ()) -> IO ()
+executeIfTitlesFound titles unrolledHeadlines f = do
+  selectedTitles <- filterTitles titles unrolledHeadlines
+  if null selectedTitles
+    then fail "no titles to create music from."
+    else f selectedTitles
+
+filterTitles :: [Text] -> [Headline] -> IO [Headline]
+filterTitles titles unrolledHeadlines = do
+  let selected = filter (\x -> title x `elem` titles) unrolledHeadlines
+      notFound = titles \\ map title selected
+  mapM_ (putStrLnStderr.warningTextFor) notFound
+  return selected
+  where
+    warningTextFor t = T.concat ["warning: title not found \"", t, "\"."]
 
 parseOrgmode :: Text -> IO Document
 parseOrgmode text = do
