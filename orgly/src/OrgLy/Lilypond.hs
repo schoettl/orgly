@@ -108,7 +108,7 @@ compileLilypondBookTemplate pieces transpose = [compileText|
   %{ forall (attrs, src) <- pieces }
   \score {
     \header {
-      piece = #{ paTitle attrs }
+      piece = #{combinedTitle attrs}
     }
 
     %{ if isJust transpose }
@@ -219,3 +219,17 @@ putStrLnStderr :: Text -> IO ()
 putStrLnStderr = TIO.hPutStrLn stderr
 
 returnRenderedMarkup = return . Data.Text.Lazy.toStrict . renderMarkup
+
+combinedTitle :: PieceAttributes -> LilypondStringLiteral
+combinedTitle attrs =
+  let extra = if composer /= ""
+                then [" (", composer, ")"]
+                else if arranger /= ""
+                       then [" (Arr. ", arranger, ")"]
+                       else []
+   in LilypondStringLiteral $ T.concat $ title : extra
+  where
+    LilypondStringLiteral title = paTitle attrs
+    LilypondStringLiteral arranger = paArranger attrs
+    LilypondStringLiteral composer = paComposer attrs
+
