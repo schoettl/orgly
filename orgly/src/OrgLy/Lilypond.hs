@@ -25,6 +25,7 @@ import qualified Text.Blaze as B
 import Shelly
 import Data.Attoparsec.Text (parseOnly)
 import System.IO (stderr)
+import Data.List (intersperse)
 
 -- for simple regex string substitution
 import Text.Regex (Regex, subRegex)
@@ -222,14 +223,23 @@ returnRenderedMarkup = return . Data.Text.Lazy.toStrict . renderMarkup
 
 combinedTitle :: PieceAttributes -> LilypondStringLiteral
 combinedTitle attrs =
-  let extra = if composer /= ""
-                then [" (", composer, ")"]
-                else if arranger /= ""
-                       then [" (Arr. ", arranger, ")"]
-                       else []
+  let list = map ((\(LilypondStringLiteral x) -> x) . ($attrs))
+              [ paComposer
+              , getArranger
+              ]
+      filteredList = filter (/="") list
+      extra = if null filteredList then [] else [" ("] ++ intersperse ", " filteredList ++ [")"]
    in LilypondStringLiteral $ T.concat $ title : extra
   where
     LilypondStringLiteral title = paTitle attrs
     LilypondStringLiteral arranger = paArranger attrs
     LilypondStringLiteral composer = paComposer attrs
 
+getArranger :: PieceAttributes -> LilypondStringLiteral
+getArranger =
+  fmapLilypondStringLiteral
+      (\x -> if x == "" then "" else T.concat ["Arr. ", x])
+  . paArranger
+
+fmapLilypondStringLiteral :: (Text -> Text) -> LilypondStringLiteral -> LilypondStringLiteral
+fmapLilypondStringLiteral f (LilypondStringLiteral x) = LilypondStringLiteral $ f x
