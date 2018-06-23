@@ -38,7 +38,7 @@ newtype LilypondSource = LilypondSource Text
 
 instance ToMarkup LilypondStringLiteral where
   toMarkup (LilypondStringLiteral s) = B.preEscapedText $ T.concat ["\"", escaped, "\""]
-    where escaped = T.replace "\"" "\\\"" s
+    where escaped = T.replace "\"" "\\\"" . T.replace "\\" "\\\\" $ s
 
 instance ToMarkup LilypondSource where
   toMarkup (LilypondSource s) = B.preEscapedText s
