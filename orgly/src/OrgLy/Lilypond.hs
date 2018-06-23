@@ -141,17 +141,17 @@ insertChordSettings input = T.pack $ subRegex
                               "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords\n"
 
 createOutput :: OutputFormat -> Transpose -> Maybe FilePath -> LilypondRequisits -> IO ()
-createOutput PDF t f a = createLilypond t a >>= createPdf (getFilename f a)
-createOutput LilyPond t Nothing a = createLilypond t a >>= TIO.putStrLn
-createOutput LilyPond t (Just f) a = createLilypond t a >>= shelly . writefile f
+createOutput PDF t f r = createLilypond t r >>= createPdf (getFilename f r)
+createOutput LilyPond t Nothing r = createLilypond t r >>= TIO.putStrLn
+createOutput LilyPond t (Just f) r = createLilypond t r >>= shelly . writefile f
 
 getFilename :: Maybe FilePath -> LilypondRequisits -> FilePath
 getFilename f (a, _) = fromMaybe (fromText $ T.concat [(unLilypondStringLiteral.paTitle) a, ".ly"]) f
 
 createBookOutput :: OutputFormat -> Transpose -> Maybe FilePath -> [LilypondRequisits] -> IO ()
-createBookOutput PDF t (Just f) hs = createBookLilypond t hs >>= createPdf f
-createBookOutput LilyPond t Nothing hs = createBookLilypond t hs >>= TIO.putStrLn
-createBookOutput LilyPond t (Just f) hs = createBookLilypond t hs >>= shelly . writefile f
+createBookOutput PDF t (Just f) req = createBookLilypond t req >>= createPdf f
+createBookOutput LilyPond t Nothing req = createBookLilypond t req >>= TIO.putStrLn
+createBookOutput LilyPond t (Just f) req = createBookLilypond t req >>= shelly . writefile f
 createBookOutput _ _ _ _ = fail "you found a bug - errornous call to createBookOutput"
 
 createLilypond :: Transpose -> LilypondRequisits -> IO Text
@@ -171,9 +171,9 @@ isKey (L.Key _ _) = True
 isKey _ = False
 
 createBookLilypond :: Transpose -> [LilypondRequisits] -> IO Text
-createBookLilypond (Transpose transpose) headlines = do
+createBookLilypond (Transpose transpose) requisits = do
   -- TODO parse sources to get key for transpose
-  let pieces = map (fmap $ LilypondSource . insertChordSettings) headlines
+  let pieces = map (fmap $ LilypondSource . insertChordSettings) requisits
   returnRenderedMarkup $ compileLilypondBookTemplate pieces transpose
 
 createPdf :: FilePath -> Text -> IO ()
