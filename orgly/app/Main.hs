@@ -11,17 +11,18 @@ import qualified Data.Text.IO as TIO
 import Data.Text (Text)
 import Data.OrgMode.Parse
 import Data.OrgMode.Types (Document (..), Headline (title, section, subHeadlines), Section (..), Properties (..))
-import Data.Maybe (isNothing, isJust, listToMaybe)
+import Data.Maybe (isNothing, isJust, listToMaybe, fromJust, fromMaybe)
 import Data.Attoparsec.Text (Parser, parseOnly, parse, maybeResult, asciiCI, endOfInput)
 import Text.Heterocephalus
 import Text.Blaze.Internal (Markup)
 import Text.Blaze (ToMarkup (toMarkup))
 import Data.List ((\\))
+import qualified Data.HashMap.Lazy as M
 
 import System.IO (stderr)
 import System.Exit (exitFailure)
 import Control.Applicative ((<|>))
-import Control.Monad (when)
+import Control.Monad (when, guard)
 import Data.Char (toUpper, toLower)
 import System.Environment (getArgs)
 import System.Console.Docopt
@@ -83,18 +84,19 @@ main = do
     Command _ _ ListTitles -> do
       mapM_ (TIO.putStrLn . title) unrolledHeadlines
     Command _ _ (CreateTitles format transpose outputFile titles) -> do
-      executeIfTitlesFound titles unrolledHeadlines
+      callWithLilypondRequisits titles unrolledHeadlines
         (mapM_ (createOutput format transpose outputFile))
     Command _ _ (CreateTitlesBook format transpose outputFile titles) -> do
-      executeIfTitlesFound titles unrolledHeadlines
+      callWithLilypondRequisits titles unrolledHeadlines
         (createBookOutput format transpose outputFile)
 
-executeIfTitlesFound :: [Text] -> [Headline] -> ([Headline] -> IO ()) -> IO ()
-executeIfTitlesFound titles unrolledHeadlines f = do
+callWithLilypondRequisits :: [Text] -> [Headline] -> ([LilypondRequisits] -> IO ()) -> IO ()
+callWithLilypondRequisits titles unrolledHeadlines f = do
   selectedTitles <- filterTitles titles unrolledHeadlines
-  if null selectedTitles
-    then fail "no titles to create music from."
-    else f selectedTitles
+  when (null selectedTitles) $ fail "no titles to create music from: titles not found."
+  titlesWithSource <- getLilypondRequisits selectedTitles
+  when (null titlesWithSource) $ fail "no titles to create music from: missing LilyPond source."
+  f titlesWithSource
 
 filterTitles :: [Text] -> [Headline] -> IO [Headline]
 filterTitles titles unrolledHeadlines = do
@@ -104,6 +106,15 @@ filterTitles titles unrolledHeadlines = do
   return selected
   where
     warningTextFor t = T.concat ["warning: title not found \"", t, "\"."]
+
+getLilypondRequisits :: [Headline] -> IO [LilypondRequisits]
+getLilypondRequisits selectedTitles = do
+  sources <- mapM extractLilypondSource selectedTitles
+  let attributes = map getPieceAttributes selectedTitles
+  let titlesWithSource = map (fmap fromJust) $
+                           filter (isJust.snd) $
+                             zip attributes sources
+  return titlesWithSource
 
 parseOrgmode :: Text -> IO Document
 parseOrgmode text = do
@@ -172,3 +183,43 @@ extractSublist hs t =
    in case h of
      Nothing -> extractSublist (concatMap subHeadlines hs) t
      Just x -> subHeadlines x
+
+extractLilypondSource :: Headline -> IO (Maybe Text)
+extractLilypondSource headline = do
+  let text = getSectionText headline
+  case parseOnly parseSectionParagraph text of
+    Right (SectionContents _ contents) -> do
+      let source = listToMaybe $ filter isLilypondSource contents
+      case source of
+        Nothing -> do
+          putStrLnStderr $ T.concat ["warning: ignoring title without lilypond source code \"", title headline, "\"."]
+          return Nothing
+        Just (Source _ src) -> return $ Just src
+    Left x -> do
+      fail $ "failed to parse '" ++ T.unpack (title headline) ++ "': " ++ x
+
+getPieceAttributes :: Headline -> PieceAttributes
+getPieceAttributes headline = PieceAttributes
+  { paTitle       = LilypondStringLiteral $ title headline
+  , paSubtitle    = getProperty "subtitle" m
+  , paSubsubtitle = getProperty "subsubtitle" m
+  , paInstrument  = getProperty "instrument" m
+  , paComposer    = getProperty "composer" m
+  , paPoet        = getProperty "poet" m
+  , paArranger    = getProperty "arranger" m
+  , paDedication  = getProperty "dedication" m
+  , paMeter       = getProperty "meter" m
+  }
+  where
+    m = unProperties $ sectionProperties $ section headline
+
+getProperty :: Text -> M.HashMap Text Text -> LilypondStringLiteral
+getProperty property = LilypondStringLiteral . fromMaybe "" . M.lookup property
+
+getSectionText :: Headline -> Text
+getSectionText = sectionParagraph . section
+
+isLilypondSource :: SectionContent -> Bool
+isLilypondSource (Source (Just "lilypond") _) = True
+isLilypondSource _ = False
+
