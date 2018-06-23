@@ -31,6 +31,7 @@ dependencies:
 - regex-compat
 - lens-regex
 - lilypond
+- MissingH
 
 default-extensions:
 - OverloadedStrings

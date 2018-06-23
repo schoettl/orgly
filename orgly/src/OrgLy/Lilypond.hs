@@ -26,7 +26,6 @@ import Text.Blaze (ToMarkup (toMarkup))
 import qualified Text.Blaze as B
 import Shelly
 import Data.Attoparsec.Text (parseOnly)
-import System.IO (stderr)
 import Data.List (intersperse)
 
 -- for simple regex string substitution
@@ -181,9 +180,6 @@ createPdf outputFile lilypond = do
   shelly $ do
     writefile outputFile lilypond
     run_ "lilypond" [toTextIgnore outputFile]
-
-putStrLnStderr :: Text -> IO ()
-putStrLnStderr = TIO.hPutStrLn stderr
 
 returnRenderedMarkup = return . Data.Text.Lazy.toStrict . renderMarkup
 

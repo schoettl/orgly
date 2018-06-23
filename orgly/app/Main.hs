@@ -19,8 +19,9 @@ import Text.Blaze (ToMarkup (toMarkup))
 import Data.List ((\\))
 import qualified Data.HashMap.Lazy as M
 
+import Data.String.Utils (endswith)
 import System.IO (stderr)
-import System.Exit (exitFailure)
+import System.Exit (die)
 import Control.Applicative ((<|>))
 import Control.Monad (when, guard)
 import Data.Char (toUpper, toLower)
@@ -93,9 +94,9 @@ main = do
 callWithLilypondRequisits :: [Text] -> [Headline] -> ([LilypondRequisits] -> IO ()) -> IO ()
 callWithLilypondRequisits titles unrolledHeadlines f = do
   selectedTitles <- filterTitles titles unrolledHeadlines
-  when (null selectedTitles) $ fail "no titles to create music from: titles not found."
+  when (null selectedTitles) $ die "error: no titles to create music from: titles not found."
   titlesWithSource <- getLilypondRequisits selectedTitles
-  when (null titlesWithSource) $ fail "no titles to create music from: missing LilyPond source."
+  when (null titlesWithSource) $ die "error: no titles to create music from: missing LilyPond source."
   f titlesWithSource
 
 filterTitles :: [Text] -> [Headline] -> IO [Headline]
@@ -145,12 +146,14 @@ parseCommandLine = do
               let Just formatStr = getArg args (longOption "format")
               let Right format = parseOnly parseOutputType $ T.pack formatStr
 
+              when ((not . endswith ".ly" . maybe ".ly" (T.unpack . toTextIgnore)) outputFile) $ do
+                die "error: filename for --output-file must end with \".ly\"."
+
               if book
                 then do
                   if isNothing outputFile && format == PDF
                     then do
-                      putStrLnStderr "error: --book and --formt=pdf requires --output-file"
-                      exitFailure
+                      die "error: --book and --formt=pdf requires --output-file"
                     else return $ CreateTitlesBook format transpose outputFile titles
 
                 else do
