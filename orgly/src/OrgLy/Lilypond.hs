@@ -159,9 +159,9 @@ createBookOutput _ _ _ _ = fail "you found a bug - errornous call to createBookO
 
 createLilypond :: TransposeTo -> LilypondRequisits -> IO Text
 createLilypond transpose (attrs, source) = do
-  let src = LilypondSource $ insertChordSettings source
   tr <- tryParseLilypondAndMakeTranspose transpose source
-  returnRenderedMarkup $ compileLilypondTemplate attrs (LilypondSource source) tr
+  let src = LilypondSource $ insertChordSettings source
+  returnRenderedMarkup $ compileLilypondTemplate attrs src tr
 
 tryParseLilypondAndMakeTranspose :: TransposeTo -> Text -> IO Transpose
 tryParseLilypondAndMakeTranspose Nothing _ = return Nothing
