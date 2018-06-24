@@ -63,8 +63,8 @@ options:
 data Command = Help | Command (Maybe Text) (Maybe FilePath) CommandAction deriving Show
 data CommandAction =
     ListTitles
-  | CreateTitles OutputFormat Transpose (Maybe FilePath) [Text]
-  | CreateTitlesBook OutputFormat Transpose (Maybe FilePath) [Text]
+  | CreateTitles OutputFormat TransposeTo (Maybe FilePath) [Text]
+  | CreateTitlesBook OutputFormat TransposeTo (Maybe FilePath) [Text]
   deriving Show
 
 getArgOrExit = getArgOrExitWith usageText
@@ -140,7 +140,7 @@ parseCommandLine = do
             then return ListTitles
             else do
               let titles = map T.pack $ getAllArgs args (longOption "title")
-              let transpose = Transpose $ fmap head $ getArg args (longOption "transpose")
+              let transpose = fmap head $ getArg args (longOption "transpose")
               let outputFile = fmap (fromText . T.pack) $ getArg args (longOption "output-file")
               let book = isPresent args (longOption "book")
               let Just formatStr = getArg args (longOption "format")

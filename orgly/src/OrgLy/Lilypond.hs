@@ -1,7 +1,7 @@
 module OrgLy.Lilypond
   ( insertChordSettings
   , OutputFormat (..)
-  , Transpose (..)
+  , TransposeTo
   , PieceAttributes (..)
   , LilypondStringLiteral (..)
   , LilypondRequisits
@@ -47,7 +47,9 @@ instance ToMarkup LilypondSource where
   toMarkup (LilypondSource s) = B.preEscapedText s
 
 data OutputFormat = LilyPond | PDF deriving (Show, Eq)
-data Transpose = Transpose (Maybe Char) deriving Show
+
+type TransposeTo = Maybe Char
+type Transpose = (Maybe (Char, Char))
 
 data PieceAttributes = PieceAttributes
   { paTitle       :: LilypondStringLiteral
@@ -63,7 +65,7 @@ data PieceAttributes = PieceAttributes
 
 type LilypondRequisits = (PieceAttributes, Text)
 
-compileLilypondTemplate :: PieceAttributes -> LilypondSource -> Maybe Char -> Markup
+compileLilypondTemplate :: PieceAttributes -> LilypondSource -> Transpose -> Markup
 compileLilypondTemplate attrs source transpose = [compileText|
 
 \version "2.18.2"
@@ -88,7 +90,7 @@ compileLilypondTemplate attrs source transpose = [compileText|
 %\germanChords
 
 %{ if isJust transpose }
-\transpose c #{fromJust transpose} {
+\transpose #{fst $ fromJust transpose} #{snd $ fromJust transpose} {
 %{ endif }
 
 #{source}
@@ -98,8 +100,8 @@ compileLilypondTemplate attrs source transpose = [compileText|
 %{ endif }
 |]
 
-compileLilypondBookTemplate :: [(PieceAttributes, LilypondSource)] -> Maybe Char -> Markup
-compileLilypondBookTemplate pieces transpose = [compileText|
+compileLilypondBookTemplate :: [(PieceAttributes, Transpose, LilypondSource)] -> Markup
+compileLilypondBookTemplate pieces = [compileText|
 
 \version "2.18.2"
 \language "deutsch"
@@ -110,19 +112,19 @@ compileLilypondBookTemplate pieces transpose = [compileText|
 
 \book {
 
-  %{ forall (attrs, src) <- pieces }
+  %{ forall (attrs, trans, src) <- pieces }
   \score {
     \header {
       piece = #{combinedTitle attrs}
     }
 
-    %{ if isJust transpose }
-    \transpose c #{fromJust transpose} {
+    %{ if isJust trans }
+    \transpose #{fst $ fromJust trans} #{snd $ fromJust trans} {
     %{ endif }
 
     #{src}
 
-    %{ if isJust transpose }
+    %{ if isJust trans }
     }
     %{ endif }
 
@@ -139,7 +141,7 @@ insertChordSettings input = T.pack $ subRegex
                               (T.unpack input)
                               "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords\n"
 
-createOutput :: OutputFormat -> Transpose -> Maybe FilePath -> LilypondRequisits -> IO ()
+createOutput :: OutputFormat -> TransposeTo -> Maybe FilePath -> LilypondRequisits -> IO ()
 createOutput PDF t f r = createLilypond t r >>= createPdf (getFilename f r)
 createOutput LilyPond t Nothing r = createLilypond t r >>= TIO.putStrLn
 createOutput LilyPond t (Just f) r = createLilypond t r >>= shelly . writefile f
@@ -147,33 +149,40 @@ createOutput LilyPond t (Just f) r = createLilypond t r >>= shelly . writefile f
 getFilename :: Maybe FilePath -> LilypondRequisits -> FilePath
 getFilename f (a, _) = fromMaybe (fromText $ T.concat [(unLilypondStringLiteral.paTitle) a, ".ly"]) f
 
-createBookOutput :: OutputFormat -> Transpose -> Maybe FilePath -> [LilypondRequisits] -> IO ()
+createBookOutput :: OutputFormat -> TransposeTo -> Maybe FilePath -> [LilypondRequisits] -> IO ()
 createBookOutput PDF t (Just f) req = createBookLilypond t req >>= createPdf f
 createBookOutput LilyPond t Nothing req = createBookLilypond t req >>= TIO.putStrLn
 createBookOutput LilyPond t (Just f) req = createBookLilypond t req >>= shelly . writefile f
 createBookOutput _ _ _ _ = fail "you found a bug - errornous call to createBookOutput"
 
-createLilypond :: Transpose -> LilypondRequisits -> IO Text
-createLilypond (Transpose transpose) (attrs, source) = do
+createLilypond :: TransposeTo -> LilypondRequisits -> IO Text
+createLilypond transpose (attrs, source) = do
   let src = LilypondSource $ insertChordSettings source
   -- TODO parse source to get key for transpose
   let (Right music) = parseOnly parseLilypondSource source
   let (L.Key pitch@(L.Pitch (pitchName, _, _)) _) = head $ filter isKey music
   print pitch
   print pitchName
+  let tr = Just ('c', 'a')
   -- TODO prettyprint (prettify -> Text.Pretty
   -- TODO pass Nothing for transpose if (show pitchName) == transpose
-  returnRenderedMarkup $ compileLilypondTemplate attrs (LilypondSource source) transpose
+  returnRenderedMarkup $ compileLilypondTemplate attrs (LilypondSource source) tr
 
 isKey :: L.Music -> Bool
 isKey (L.Key _ _) = True
 isKey _ = False
 
-createBookLilypond :: Transpose -> [LilypondRequisits] -> IO Text
-createBookLilypond (Transpose transpose) requisits = do
+createBookLilypond :: TransposeTo -> [LilypondRequisits] -> IO Text
+createBookLilypond transpose requisits = do
   -- TODO parse sources to get key for transpose
+  -- let (Right music) = parseOnly parseLilypondSource source
+  -- let (L.Key pitch@(L.Pitch (pitchName, _, _)) _) = head $ filter isKey music
+  -- print pitch
+  -- print pitchName
+  let trs = repeat $ Just ('c', 'a')
   let pieces = map (fmap $ LilypondSource . insertChordSettings) requisits
-  returnRenderedMarkup $ compileLilypondBookTemplate pieces transpose
+      pieces' = map (\((x, y), z) -> (x, z, y)) $ zip pieces trs
+  returnRenderedMarkup $ compileLilypondBookTemplate pieces'
 
 createPdf :: FilePath -> Text -> IO ()
 createPdf outputFile lilypond = do
