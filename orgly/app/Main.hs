@@ -44,9 +44,8 @@ options:
   -f, --format=FORMAT
     Output format, one of: lilypond, pdf [default: pdf]
   -T, --transpose=TARGET_KEY
-    Transpose music to TARGET_KEY assuming it is originally in c major or a
-    minor respectively. TARGET_KEY must be a lower case letter and a valid
-    pitch.
+    Transpose music to TARGET_KEY. TARGET_KEY must be a lower case letter and a
+    valid pitch. Currently, only single-letter pitch names are supported!
   -o, --output-file=FILE
     Write output to this lilypond file instead of creating a file for every
     title. This only applies when multiple titles are given.
