@@ -33,7 +33,8 @@ usageText :: Docopt
 usageText = [docopt|
 usage:
   orgly [-ios] --list
-  orgly [-iofbsT] --title=TITLE...
+  orgly [-iofbsp] --title=TITLE...
+  orgly -i [-ofbsp] --titles-stdin
   orgly --help
 
 options:
@@ -41,9 +42,12 @@ options:
     List all titles from orgmode input
   -t, --title=TITLE
     Create PDF from title
+  -T, --titles-stdin
+    Read titles from stdin instead of --title options.
+    Can only be used with --input-file.
   -f, --format=FORMAT
     Output format, one of: lilypond, pdf [default: pdf]
-  -T, --transpose=TARGET_KEY
+  -p, --transpose=TARGET_KEY
     Transpose music to TARGET_KEY. TARGET_KEY must be a lower case letter and a
     valid pitch. Currently, only single-letter pitch names are supported!
   -o, --output-file=FILE
@@ -138,7 +142,7 @@ parseCommandLine = do
           commandAction <- if isPresent args (longOption "list")
             then return ListTitles
             else do
-              let titles = map T.pack $ getAllArgs args (longOption "title")
+              titles <- getTitles args
               let transpose = fmap head $ getArg args (longOption "transpose")
               let outputFile = fmap (fromText . T.pack) $ getArg args (longOption "output-file")
               let book = isPresent args (longOption "book")
@@ -164,6 +168,14 @@ parseCommandLine = do
                       return $ CreateTitles format transpose outputFile titles
 
           return $ Command sublistTitle maybeInputFile commandAction
+
+getTitles :: Arguments -> IO [Text]
+getTitles args = if isPresent args (longOption "titles-stdin")
+  then T.lines <$> TIO.getContents
+    -- this case is already taken care of by docopt:
+    --when (not . isPresent args $ (longOption "input-file")) $
+    --  die "error: --titles-stdin requires --input-file."
+  else return $ map T.pack $ getAllArgs args (longOption "title")
 
 parseOutputType :: Parser OutputFormat
 parseOutputType = (parsePDFOutputType <|> parseLilyPondOutputType) <* endOfInput
