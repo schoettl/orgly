@@ -12,30 +12,34 @@ import Control.Applicative ((<|>))
 import Control.Monad (when)
 import Data.List (nub)
 
-data Command =
+data LyObject =
     PlainCommand Text
   | MusicCommand L.Music
+  | Comment
   deriving Show
 
 parseLilypondSource :: Parser [L.Music]
 parseLilypondSource = do
-  cmds <- many' (skipWhile (/='\\') >> parseCommand)
+  cmds <- many' $ (skipWhile $ notInClass "\\%") >> (parseCommand <|> parseComment)
   return $ foldr f [] cmds
   where
     f (MusicCommand m) ms = m:ms
     f _ ms = ms
 
-parseCommand :: Parser Command
+parseComment :: Parser LyObject
+parseComment = takeTill isEndOfLine >> endOfLine >> return Comment
+
+parseCommand :: Parser LyObject
 parseCommand = do
   char '\\'
   parseMusicCommand <|> parsePlainCommand
 
-parsePlainCommand :: Parser Command
+parsePlainCommand :: Parser LyObject
 parsePlainCommand = do
   cmd <- takeWhile isAlpha
   return $ PlainCommand cmd
 
-parseMusicCommand :: Parser Command
+parseMusicCommand :: Parser LyObject
 parseMusicCommand = MusicCommand <$> parseKey
 
 parseKey :: Parser L.Music

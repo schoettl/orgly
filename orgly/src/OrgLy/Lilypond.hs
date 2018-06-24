@@ -27,6 +27,8 @@ import qualified Text.Blaze as B
 import Shelly
 import Data.Attoparsec.Text (parseOnly)
 import Data.List (intersperse)
+import Data.Char (toLower)
+import System.IO (stderr)
 
 -- for simple regex string substitution
 import Text.Regex (Regex, subRegex)
@@ -158,15 +160,26 @@ createBookOutput _ _ _ _ = fail "you found a bug - errornous call to createBookO
 createLilypond :: TransposeTo -> LilypondRequisits -> IO Text
 createLilypond transpose (attrs, source) = do
   let src = LilypondSource $ insertChordSettings source
-  -- TODO parse source to get key for transpose
-  let (Right music) = parseOnly parseLilypondSource source
-  let (L.Key pitch@(L.Pitch (pitchName, _, _)) _) = head $ filter isKey music
-  print pitch
-  print pitchName
-  let tr = Just ('c', 'a')
-  -- TODO prettyprint (prettify -> Text.Pretty
-  -- TODO pass Nothing for transpose if (show pitchName) == transpose
+  tr <- tryParseLilypondAndMakeTranspose transpose source
   returnRenderedMarkup $ compileLilypondTemplate attrs (LilypondSource source) tr
+
+tryParseLilypondAndMakeTranspose :: TransposeTo -> Text -> IO Transpose
+tryParseLilypondAndMakeTranspose Nothing _ = return Nothing
+tryParseLilypondAndMakeTranspose (Just b) src = do
+  case parseOnly parseLilypondSource src of
+    Right music -> do
+      let a = maybe b getPitchName $ listToMaybe $ filter isKey music
+      return $ if b == a
+        then Nothing
+        else Just (a, b)
+    Left msg -> do
+      putStrLnStderr $ T.pack msg
+      putStrLnStderr "warning: failed to parse LilyPond. assuming \\key c \\major."
+      return Nothing
+  where
+    getPitchName :: L.Music -> Char
+    getPitchName = (\(L.Key (L.Pitch (pitchName, _, _)) _)
+                        -> toLower $ head $ show pitchName)
 
 isKey :: L.Music -> Bool
 isKey (L.Key _ _) = True
@@ -174,12 +187,7 @@ isKey _ = False
 
 createBookLilypond :: TransposeTo -> [LilypondRequisits] -> IO Text
 createBookLilypond transpose requisits = do
-  -- TODO parse sources to get key for transpose
-  -- let (Right music) = parseOnly parseLilypondSource source
-  -- let (L.Key pitch@(L.Pitch (pitchName, _, _)) _) = head $ filter isKey music
-  -- print pitch
-  -- print pitchName
-  let trs = repeat $ Just ('c', 'a')
+  trs <- mapM (tryParseLilypondAndMakeTranspose transpose) $ map snd requisits
   let pieces = map (fmap $ LilypondSource . insertChordSettings) requisits
       pieces' = map (\((x, y), z) -> (x, z, y)) $ zip pieces trs
   returnRenderedMarkup $ compileLilypondBookTemplate pieces'
@@ -214,3 +222,7 @@ getArranger =
 
 fmapLilypondStringLiteral :: (Text -> Text) -> LilypondStringLiteral -> LilypondStringLiteral
 fmapLilypondStringLiteral f (LilypondStringLiteral x) = LilypondStringLiteral $ f x
+
+putStrLnStderr :: Text -> IO ()
+putStrLnStderr = TIO.hPutStrLn stderr
+
