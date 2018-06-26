@@ -1,12 +1,13 @@
 module OrgLy.Lilypond
   ( insertChordSettings
   , OutputFormat (..)
+  , CollectionType (..)
   , TransposeTo
   , PieceAttributes (..)
   , LilypondStringLiteral (..)
   , LilypondRequisits
   , createOutput
-  , createBookOutput
+  , createCollectionOutput
   ) where
 
 import Prelude hiding (FilePath)
@@ -33,6 +34,11 @@ import System.IO (stderr)
 -- for simple regex string substitution
 import Text.Regex (Regex, subRegex)
 import Text.Regex.Quote
+
+lilypondVersion = LilypondStringLiteral "2.18.2"
+
+data CollectionType = Collection | Book
+  deriving Show
 
 newtype LilypondStringLiteral = LilypondStringLiteral
   { unLilypondStringLiteral :: Text
@@ -70,7 +76,7 @@ type LilypondRequisits = (PieceAttributes, Text)
 compileLilypondTemplate :: PieceAttributes -> LilypondSource -> Transpose -> Markup
 compileLilypondTemplate attrs source transpose = [compileText|
 
-\version "2.18.2"
+\version #{lilypondVersion}
 \language "deutsch"
 
 \header {
@@ -102,10 +108,37 @@ compileLilypondTemplate attrs source transpose = [compileText|
 %{ endif }
 |]
 
+compileLilypondCollectionTemplate :: [(PieceAttributes, Transpose, LilypondSource)] -> Markup
+compileLilypondCollectionTemplate pieces = [compileText|
+
+\version #{lilypondVersion}
+\language "deutsch"
+
+\header {
+  tagline = ##f
+}
+
+%{ forall (attrs, trans, src) <- pieces }
+  \markup { #{combinedTitle attrs} }
+
+  %{ if isJust trans }
+  \transpose #{fst $ fromJust trans} #{snd $ fromJust trans} {
+  %{ endif }
+
+  #{src}
+
+  %{ if isJust trans }
+  }
+  %{ endif }
+
+%{ endforall }
+
+|]
+
 compileLilypondBookTemplate :: [(PieceAttributes, Transpose, LilypondSource)] -> Markup
 compileLilypondBookTemplate pieces = [compileText|
 
-\version "2.18.2"
+\version #{lilypondVersion}
 \language "deutsch"
 
 \header {
@@ -151,11 +184,11 @@ createOutput LilyPond t (Just f) r = createLilypond t r >>= shelly . writefile f
 getFilename :: Maybe FilePath -> LilypondRequisits -> FilePath
 getFilename f (a, _) = fromMaybe (fromText $ T.concat [(unLilypondStringLiteral.paTitle) a, ".ly"]) f
 
-createBookOutput :: OutputFormat -> TransposeTo -> Maybe FilePath -> [LilypondRequisits] -> IO ()
-createBookOutput PDF t (Just f) req = createBookLilypond t req >>= createPdf f
-createBookOutput LilyPond t Nothing req = createBookLilypond t req >>= TIO.putStrLn
-createBookOutput LilyPond t (Just f) req = createBookLilypond t req >>= shelly . writefile f
-createBookOutput _ _ _ _ = fail "you found a bug - errornous call to createBookOutput"
+createCollectionOutput :: CollectionType -> OutputFormat -> TransposeTo -> Maybe FilePath -> [LilypondRequisits] -> IO ()
+createCollectionOutput ct PDF t (Just f) req = createCollectionLilypond ct t req >>= createPdf f
+createCollectionOutput ct LilyPond t Nothing req = createCollectionLilypond ct t req >>= TIO.putStrLn
+createCollectionOutput ct LilyPond t (Just f) req = createCollectionLilypond ct t req >>= shelly . writefile f
+createCollectionOutput _ _ _ _ _ = fail "you found a bug - errornous call to createCollectionOutput"
 
 createLilypond :: TransposeTo -> LilypondRequisits -> IO Text
 createLilypond transpose (attrs, source) = do
@@ -185,12 +218,14 @@ isKey :: L.Music -> Bool
 isKey (L.Key _ _) = True
 isKey _ = False
 
-createBookLilypond :: TransposeTo -> [LilypondRequisits] -> IO Text
-createBookLilypond transpose requisits = do
+createCollectionLilypond :: CollectionType -> TransposeTo -> [LilypondRequisits] -> IO Text
+createCollectionLilypond collectionType transpose requisits = do
   trs <- mapM (tryParseLilypondAndMakeTranspose transpose) $ map snd requisits
   let pieces = map (fmap $ LilypondSource . insertChordSettings) requisits
       pieces' = map (\((x, y), z) -> (x, z, y)) $ zip pieces trs
-  returnRenderedMarkup $ compileLilypondBookTemplate pieces'
+  returnRenderedMarkup $ case collectionType of
+    Collection -> compileLilypondCollectionTemplate pieces'
+    Book       -> compileLilypondBookTemplate pieces'
 
 createPdf :: FilePath -> Text -> IO ()
 createPdf outputFile lilypond = do

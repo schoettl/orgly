@@ -33,8 +33,8 @@ usageText :: Docopt
 usageText = [docopt|
 usage:
   orgly [-ios] --list
-  orgly [-iofbsp] --title=TITLE...
-  orgly -i [-ofbsp] --titles-stdin
+  orgly [-iofbcsp] --title=TITLE...
+  orgly -i [-ofbcsp] --titles-stdin
   orgly --help
 
 options:
@@ -54,7 +54,11 @@ options:
     Write output to this lilypond file instead of creating a file for every
     title. This only applies when multiple titles are given.
   -b, --book
-    Create one document for all selected titles. This can save a lot of paper.
+    Create one document for all selected titles (lilypond \book environment).
+  -c, --collection
+    Create one document for all selected titles. Unlike as with --book,
+    documents created with --collection can contain lilypond \markup.
+    But only without --transpose :(
   -i, --input-file=FILE
     Read input file instead of stdin.
   -s, --sublist=TITLE
@@ -67,7 +71,7 @@ data Command = Help | Command (Maybe Text) (Maybe FilePath) CommandAction derivi
 data CommandAction =
     ListTitles
   | CreateTitles OutputFormat TransposeTo (Maybe FilePath) [Text]
-  | CreateTitlesBook OutputFormat TransposeTo (Maybe FilePath) [Text]
+  | CreateTitlesCollection CollectionType OutputFormat TransposeTo (Maybe FilePath) [Text]
   deriving Show
 
 getArgOrExit = getArgOrExitWith usageText
@@ -90,9 +94,9 @@ main = do
     Command _ _ (CreateTitles format transpose outputFile titles) -> do
       callWithLilypondRequisits titles unrolledHeadlines
         (mapM_ (createOutput format transpose outputFile))
-    Command _ _ (CreateTitlesBook format transpose outputFile titles) -> do
+    Command _ _ (CreateTitlesCollection collectionType format transpose outputFile titles) -> do
       callWithLilypondRequisits titles unrolledHeadlines
-        (createBookOutput format transpose outputFile)
+        (createCollectionOutput collectionType format transpose outputFile)
 
 callWithLilypondRequisits :: [Text] -> [Headline] -> ([LilypondRequisits] -> IO ()) -> IO ()
 callWithLilypondRequisits titles unrolledHeadlines f = do
@@ -146,18 +150,23 @@ parseCommandLine = do
               let transpose = fmap head $ getArg args (longOption "transpose")
               let outputFile = fmap (fromText . T.pack) $ getArg args (longOption "output-file")
               let book = isPresent args (longOption "book")
+              let collection = isPresent args (longOption "collection")
               let Just formatStr = getArg args (longOption "format")
               let Right format = parseOnly parseOutputType $ T.pack formatStr
 
-              when ((not . endswith ".ly" . maybe ".ly" (T.unpack . toTextIgnore)) outputFile) $ do
+              when ((not . endswith ".ly" . maybe ".ly" (T.unpack . toTextIgnore)) outputFile) $
                 die "error: filename for --output-file must end with \".ly\"."
+    
+              -- Not handled by Docopt to keep usageText cleaner
+              when (collection && book) $
+                die "error: --book and --collection cannot be used together."
 
-              if book
+              if collection || book
                 then do
+                  let collectionType = if collection then Collection else Book
                   if isNothing outputFile && format == PDF
-                    then do
-                      die "error: --book and --formt=pdf requires --output-file"
-                    else return $ CreateTitlesBook format transpose outputFile titles
+                    then die "error: --book and --formt=pdf requires --output-file"
+                    else return $ CreateTitlesCollection collectionType format transpose outputFile titles
 
                 else do
                   if length titles > 1 && isJust outputFile
