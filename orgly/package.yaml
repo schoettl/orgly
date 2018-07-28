@@ -32,6 +32,7 @@ dependencies:
 - lens-regex
 - lilypond
 - MissingH
+- system-filepath
 
 default-extensions:
 - OverloadedStrings

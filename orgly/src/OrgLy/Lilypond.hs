@@ -30,6 +30,7 @@ import Data.Attoparsec.Text (parseOnly)
 import Data.List (intersperse)
 import Data.Char (toLower)
 import System.IO (stderr)
+import Filesystem.Path (directory)
 
 -- for simple regex string substitution
 import Text.Regex (Regex, subRegex)
@@ -231,6 +232,7 @@ createPdf :: FilePath -> Text -> IO ()
 createPdf outputFile lilypond = do
   shelly $ do
     writefile outputFile lilypond
+    cd $ directory outputFile
     run_ "lilypond" [toTextIgnore outputFile]
 
 returnRenderedMarkup = return . Data.Text.Lazy.toStrict . renderMarkup
