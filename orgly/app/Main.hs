@@ -86,7 +86,7 @@ main = do
   let Command sublistTitle _ _ = command
   document <- parseOrgmode input
   let Document _ headlines = document
-  let sublist = maybe headlines (extractSublist headlines) $ sublistTitle
+  let sublist = maybe headlines (extractSublist headlines) sublistTitle
   let unrolledHeadlines = unrollHeadlines sublist
   case command of
     Command _ _ ListTitles -> do
@@ -156,7 +156,7 @@ parseCommandLine = do
 
               when ((not . endswith ".ly" . maybe ".ly" (T.unpack . toTextIgnore)) outputFile) $
                 die "error: filename for --output-file must end with \".ly\"."
-    
+
               -- Not handled by Docopt to keep usageText cleaner
               when (collection && book) $
                 die "error: --book and --collection cannot be used together."
