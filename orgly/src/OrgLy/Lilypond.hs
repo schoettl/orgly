@@ -182,7 +182,7 @@ insertTranspose t input = maybe input transpose t
                 where
                   transpose :: (Char, Char) -> Text
                   transpose (x, y) = T.pack
-                                   . sub [r|^<<\s*(%.*)?$|] ("\\transpose " ++ [x] ++ " " ++ [y] ++ " {\n<<")
+                                   . sub [r|^<<\s*(%.*)?$|] ("\\transpose " ++ x:" " ++ y:" {\n<<")
                                    . sub [r|^>>\s*(%.*)?$|] ">>\n}"
                                    . T.unpack
                                    $ input
