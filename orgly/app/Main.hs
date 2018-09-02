@@ -33,8 +33,8 @@ usageText :: Docopt
 usageText = [docopt|
 usage:
   orgly [-ios] --list
-  orgly [-iofbcsp] --title=TITLE...
-  orgly -i [-ofbcsp] --titles-stdin
+  orgly [-iofbcspS] --title=TITLE...
+  orgly -i [-ofbcspS] --titles-stdin
   orgly --help
 
 options:
@@ -66,7 +66,7 @@ options:
     Read input file instead of stdin.
   -s, --sublist=TITLE
     Only read the sublist with this title from the orgmode input.
-  --simple-src
+  -S, --simple-src
     Use this option only for very simple embedded lilypond source. Simple
     source must not contain markup or variable assignment at the top level.
     Otherwise --transpose will not work because with this option it wraps
