@@ -188,25 +188,26 @@ insertTranspose t input = maybe input transpose t
                                    $ input
                   sub r i s = subRegex r s i
 
-createOutput :: OutputFormat -> TransposeTo -> Maybe FilePath -> LilypondRequisits -> IO ()
-createOutput PDF t f r = createLilypond t r >>= createPdf (getFilename f r)
-createOutput LilyPond t Nothing r = createLilypond t r >>= TIO.putStrLn
-createOutput LilyPond t (Just f) r = createLilypond t r >>= shelly . writefile f
+createOutput :: OutputFormat -> TransposeTo -> Maybe FilePath -> Bool -> LilypondRequisits -> IO ()
+createOutput PDF t f s r = createLilypond t s r >>= createPdf (getFilename f r)
+createOutput LilyPond t Nothing s r = createLilypond t s r >>= TIO.putStrLn
+createOutput LilyPond t (Just f) s r = createLilypond t s r >>= shelly . writefile f
 
 getFilename :: Maybe FilePath -> LilypondRequisits -> FilePath
 getFilename f (a, _) = fromMaybe (fromText $ T.concat [(unLilypondStringLiteral.paTitle) a, ".ly"]) f
 
-createCollectionOutput :: CollectionType -> OutputFormat -> TransposeTo -> Maybe FilePath -> [LilypondRequisits] -> IO ()
-createCollectionOutput ct PDF t (Just f) req = createCollectionLilypond ct t req >>= createPdf f
-createCollectionOutput ct LilyPond t Nothing req = createCollectionLilypond ct t req >>= TIO.putStrLn
-createCollectionOutput ct LilyPond t (Just f) req = createCollectionLilypond ct t req >>= shelly . writefile f
-createCollectionOutput _ _ _ _ _ = fail "you found a bug - errornous call to createCollectionOutput"
+createCollectionOutput :: CollectionType -> OutputFormat -> TransposeTo -> Maybe FilePath -> Bool -> [LilypondRequisits] -> IO ()
+createCollectionOutput ct PDF t (Just f) s req = createCollectionLilypond ct t s req >>= createPdf f
+createCollectionOutput ct LilyPond t Nothing s req = createCollectionLilypond ct t s req >>= TIO.putStrLn
+createCollectionOutput ct LilyPond t (Just f) s req = createCollectionLilypond ct t s req >>= shelly . writefile f
+createCollectionOutput _ _ _ _ _ _ = fail "you found a bug - errornous call to createCollectionOutput"
 
-createLilypond :: TransposeTo -> LilypondRequisits -> IO Text
-createLilypond transpose (attrs, source) = do
+createLilypond :: TransposeTo -> Bool -> LilypondRequisits -> IO Text
+createLilypond transpose simpleSrc (attrs, source) = do
   tr <- tryParseLilypondAndMakeTranspose transpose source
-  let src = prepareSource tr source
-  returnRenderedMarkup $ compileLilypondTemplate attrs src tr
+  let src = prepareSource simpleSrc tr source
+  let tr' = maybeWhen simpleSrc tr
+  returnRenderedMarkup $ compileLilypondTemplate attrs src tr'
 
 tryParseLilypondAndMakeTranspose :: TransposeTo -> Text -> IO Transpose
 tryParseLilypondAndMakeTranspose Nothing _ = return Nothing
@@ -230,16 +231,17 @@ isKey :: L.Music -> Bool
 isKey (L.Key _ _) = True
 isKey _ = False
 
-createCollectionLilypond :: CollectionType -> TransposeTo -> [LilypondRequisits] -> IO Text
-createCollectionLilypond collectionType transpose requisits = do
+createCollectionLilypond :: CollectionType -> TransposeTo -> Bool -> [LilypondRequisits] -> IO Text
+createCollectionLilypond collectionType transpose simpleSrc requisits = do
   trs <- mapM (tryParseLilypondAndMakeTranspose transpose) $ map snd requisits
-  let pieces = map (\((x, y), z) -> (x, z, prepareSource z y)) $ zip requisits trs
+  let trs' = map (maybeWhen simpleSrc) trs
+  let pieces = map (\((x, y), z) -> (x, z, prepareSource simpleSrc z y)) $ zip requisits trs'
   returnRenderedMarkup $ case collectionType of
     Collection -> compileLilypondCollectionTemplate pieces
     Book       -> compileLilypondBookTemplate pieces
 
-prepareSource :: Transpose -> Text -> LilypondSource
-prepareSource transpose = LilypondSource . insertChordSettings . insertTranspose transpose
+prepareSource :: Bool -> Transpose -> Text -> LilypondSource
+prepareSource simpleSrc transpose = LilypondSource . insertChordSettings . (if simpleSrc then id else insertTranspose transpose)
 
 createPdf :: FilePath -> Text -> IO ()
 createPdf outputFile lilypond = do
@@ -276,3 +278,6 @@ fmapLilypondStringLiteral f (LilypondStringLiteral x) = LilypondStringLiteral $ 
 putStrLnStderr :: Text -> IO ()
 putStrLnStderr = TIO.hPutStrLn stderr
 
+maybeWhen :: Bool -> Maybe a -> Maybe a
+maybeWhen True x = x
+maybeWhen False _ = Nothing

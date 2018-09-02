@@ -50,6 +50,9 @@ options:
   -p, --transpose=TARGET_KEY
     Transpose music to TARGET_KEY. TARGET_KEY must be a lower case letter and a
     valid pitch. Currently, only single-letter pitch names are supported!
+    Unless --simple-src is present, the transpose command is inserted before
+    "<<" (at begin of line) and closed after ">>" (at begin of line).
+    Everything between "<<" and ">>" is assumed to be the score.
   -o, --output-file=FILE
     Write output to this lilypond file instead of creating a file for every
     title. This only applies when multiple titles are given.
@@ -58,16 +61,21 @@ options:
   -c, --collection
     Create one document for all selected titles. Unlike as with --book,
     documents created with --collection can contain lilypond \markup.
-    But only without --transpose :(
+    But only without --transpose :( FIXME
   -i, --input-file=FILE
     Read input file instead of stdin.
   -s, --sublist=TITLE
     Only read the sublist with this title from the orgmode input.
+  --simple-src
+    Use this option only for very simple embedded lilypond source. Simple
+    source must not contain markup or variable assignment at the top level.
+    Otherwise --transpose will not work because with this option it wraps
+    the full source.
   -h, --help
     print this help message
 |]
 
-data Command = Help | Command (Maybe Text) (Maybe FilePath) CommandAction deriving Show
+data Command = Help | Command (Maybe Text) (Maybe FilePath) Bool CommandAction deriving Show
 data CommandAction =
     ListTitles
   | CreateTitles OutputFormat TransposeTo (Maybe FilePath) [Text]
@@ -80,23 +88,23 @@ main :: IO ()
 main = do
   command <- parseCommandLine
   input <- case command of
-    Command _ Nothing _ -> TIO.getContents
-    Command _ (Just f) _ -> shelly $ readfile f
+    Command _ Nothing _ _ -> TIO.getContents
+    Command _ (Just f) _ _ -> shelly $ readfile f
     Help -> exitWithUsage usageText
-  let Command sublistTitle _ _ = command
+  let Command sublistTitle _ _ _ = command
   document <- parseOrgmode input
   let Document _ headlines = document
   let sublist = maybe headlines (extractSublist headlines) sublistTitle
   let unrolledHeadlines = unrollHeadlines sublist
   case command of
-    Command _ _ ListTitles -> do
+    Command _ _ _ ListTitles -> do
       mapM_ (TIO.putStrLn . title) unrolledHeadlines
-    Command _ _ (CreateTitles format transpose outputFile titles) -> do
+    Command _ _ simpleSrc (CreateTitles format transpose outputFile titles) -> do
       callWithLilypondRequisits titles unrolledHeadlines
-        (mapM_ (createOutput format transpose outputFile))
-    Command _ _ (CreateTitlesCollection collectionType format transpose outputFile titles) -> do
+        (mapM_ (createOutput format transpose outputFile simpleSrc))
+    Command _ _ simpleSrc (CreateTitlesCollection collectionType format transpose outputFile titles) -> do
       callWithLilypondRequisits titles unrolledHeadlines
-        (createCollectionOutput collectionType format transpose outputFile)
+        (createCollectionOutput collectionType format transpose outputFile simpleSrc)
 
 callWithLilypondRequisits :: [Text] -> [Headline] -> ([LilypondRequisits] -> IO ()) -> IO ()
 callWithLilypondRequisits titles unrolledHeadlines f = do
@@ -143,6 +151,7 @@ parseCommandLine = do
         else do
           let maybeInputFile = fmap (fromText . T.pack) $ getArg args (longOption "input-file")
               sublistTitle = T.pack <$> getArg args (longOption "sublist")
+              simpleSrc = isPresent args (longOption "simple-src")
           commandAction <- if isPresent args (longOption "list")
             then return ListTitles
             else do
@@ -176,7 +185,7 @@ parseCommandLine = do
                     else do
                       return $ CreateTitles format transpose outputFile titles
 
-          return $ Command sublistTitle maybeInputFile commandAction
+          return $ Command sublistTitle maybeInputFile simpleSrc commandAction
 
 getTitles :: Arguments -> IO [Text]
 getTitles args = if isPresent args (longOption "titles-stdin")
