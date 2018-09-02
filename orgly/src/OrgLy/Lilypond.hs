@@ -177,6 +177,17 @@ insertChordSettings input = T.pack $ subRegex
                               (T.unpack input)
                               "\\chords {\n\\set chordNameLowercaseMinor = ##t\n\\germanChords\n"
 
+insertTranspose :: Transpose -> Text -> Text
+insertTranspose t input = maybe input transpose t
+                where
+                  transpose :: (Char, Char) -> Text
+                  transpose (x, y) = T.pack
+                                   . sub [r|^<<\s*(%.*)?$|] ("\\transpose " ++ [x] ++ " " ++ [y] ++ " {\n<<")
+                                   . sub [r|^>>\s*(%.*)?$|] ">>\n}"
+                                   . T.unpack
+                                   $ input
+                  sub r i s = subRegex r s i
+
 createOutput :: OutputFormat -> TransposeTo -> Maybe FilePath -> LilypondRequisits -> IO ()
 createOutput PDF t f r = createLilypond t r >>= createPdf (getFilename f r)
 createOutput LilyPond t Nothing r = createLilypond t r >>= TIO.putStrLn
@@ -194,7 +205,7 @@ createCollectionOutput _ _ _ _ _ = fail "you found a bug - errornous call to cre
 createLilypond :: TransposeTo -> LilypondRequisits -> IO Text
 createLilypond transpose (attrs, source) = do
   tr <- tryParseLilypondAndMakeTranspose transpose source
-  let src = LilypondSource $ insertChordSettings source
+  let src = prepareSource tr source
   returnRenderedMarkup $ compileLilypondTemplate attrs src tr
 
 tryParseLilypondAndMakeTranspose :: TransposeTo -> Text -> IO Transpose
@@ -222,11 +233,13 @@ isKey _ = False
 createCollectionLilypond :: CollectionType -> TransposeTo -> [LilypondRequisits] -> IO Text
 createCollectionLilypond collectionType transpose requisits = do
   trs <- mapM (tryParseLilypondAndMakeTranspose transpose) $ map snd requisits
-  let pieces = map (fmap $ LilypondSource . insertChordSettings) requisits
-      pieces' = map (\((x, y), z) -> (x, z, y)) $ zip pieces trs
+  let pieces = map (\((x, y), z) -> (x, z, prepareSource z y)) $ zip requisits trs
   returnRenderedMarkup $ case collectionType of
-    Collection -> compileLilypondCollectionTemplate pieces'
-    Book       -> compileLilypondBookTemplate pieces'
+    Collection -> compileLilypondCollectionTemplate pieces
+    Book       -> compileLilypondBookTemplate pieces
+
+prepareSource :: Transpose -> Text -> LilypondSource
+prepareSource transpose = LilypondSource . insertChordSettings . insertTranspose transpose
 
 createPdf :: FilePath -> Text -> IO ()
 createPdf outputFile lilypond = do
